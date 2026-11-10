@@ -7,6 +7,7 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const allowed = new Set(["index.html", "styles.css", "app.js", "features.js", "parser.js", "library-filters.js", "account-reader.js", "i18n.js", "locales.json", "tests/bridge.js", "tests/browser-test.js"]);
 allowed.add("filter-presets.js");
 allowed.add("notifications.js");
+allowed.add("app-updates.js");
 for (const name of ["showcase.js", "outfit.svg", "hair.svg", "glasses.svg", "material.svg"]) allowed.add("tests/showcase/" + name);
 const server = http.createServer(async (request, response) => {
   try {

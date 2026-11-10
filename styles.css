@@ -130,6 +130,17 @@ input::placeholder { color: #969ba5; }
 .setting-row > div:first-child { min-width: 0; }
 .setting-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .setting-actions .text-button { padding: 8px 0; }
+.app-update-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; padding: 18px 22px; margin-bottom: 24px; border: 1px solid #e8c5bb; border-radius: 10px; background: #fff7f3; }
+.app-update-banner h2 { margin: 0; font-size: 14px; line-height: 1.6; }
+.app-update-copy { flex: 1 1 280px; min-width: 0; overflow-wrap: anywhere; }
+.app-update-copy p { margin: 6px 0 0; }
+.app-update-setting { flex-wrap: wrap; align-items: flex-start; }
+#app-update-status { font-size: 13px; line-height: 1.7; }
+.app-update-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; max-width: 100%; }
+.app-update-actions .text-button { padding: 8px 0; }
+.app-update-actions .primary, .app-update-actions .secondary { white-space: normal; }
+.app-update-progress { display: grid; gap: 8px; margin-top: 12px; color: #596170; font-size: 12px; line-height: 1.6; }
+.app-update-progress progress { width: 100%; }
 .muted, .path { color: var(--muted); font-size: 12px; line-height: 1.7; }
 .path { overflow-wrap: anywhere; margin: 0; }
 .checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #676e7a; }

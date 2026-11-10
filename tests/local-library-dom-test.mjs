@@ -16,7 +16,7 @@ window.structuredClone = structuredClone;
 window.scrollTo = () => {};
 window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
 window.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new window.Event("close")); };
-const scripts = await Promise.all(["tests/bridge.js", "i18n.js", "parser.js", "library-filters.js", "app.js", "features.js", "filter-presets.js", "notifications.js"].map(read));
+const scripts = await Promise.all(["tests/bridge.js", "i18n.js", "parser.js", "library-filters.js", "app.js", "features.js", "filter-presets.js", "notifications.js", "app-updates.js"].map(read));
 window.eval(scripts.join("\n;\n") + "\nwindow.testHarness = { messages: testMessages };");
 window.document.dispatchEvent(new window.Event("DOMContentLoaded"));
 await new Promise(resolve => setTimeout(resolve, 60));

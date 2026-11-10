@@ -114,6 +114,7 @@ if (desktopMode) {
     if (message.type === "close-request") { showCloseChoice(); return; }
     if (message.type === "updates") { notificationState = message.state; renderNotifications(); return; }
     if (message.type === "updates-open") { showView("notifications"); return; }
+    if (message.type === "app-update") { appUpdateState = message.state; renderAppUpdate(); return; }
     const request = desktopRequests.get(message.id);
     if (!request) return;
     desktopRequests.delete(message.id);
@@ -462,6 +463,7 @@ function renderSettings() {
   element("update-notifications").checked = settings.updateNotifications !== false;
   renderCurrency();
   renderSessionBackup();
+  if (typeof renderAppUpdate === "function") renderAppUpdate();
 }
 
 function renderSessionBackup() {
@@ -588,6 +590,7 @@ document.addEventListener("DOMContentLoaded", () => run(async () => {
   settings = stored.settings || {};
   filterPresets = stored.filterPresets || [];
   notificationState = stored.notifications || { items: [] };
+  appUpdateState = stored.appUpdate || { status: "idle", currentVersion: "0.5.13" };
   systemLanguage = stored.systemLanguage || navigator.language;
   I18n.set(settings.language || "auto", systemLanguage);
   downloads = stored.downloads || [];

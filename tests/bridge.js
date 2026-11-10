@@ -1,5 +1,6 @@
 const testFixture = {
   testing: true,
+  appUpdate: { status: "idle", currentVersion: "0.5.13" },
   systemLanguage: "zh-CN",
   settings: { currency: "CNY", downloadDirectory: "C:\\TestDownloads", rememberSession: true, pinnedTags: [], language: "auto", closeBehavior: "ask", updateNotifications: true },
   filterPresets: [],
@@ -44,6 +45,19 @@ window.chrome.webview = {
       const payload = message.payload;
       switch (message.action) {
         case "load": result = testFixture; break;
+        case "app-update-check":
+          testFixture.appUpdate = { ...testFixture.appUpdate, status: "checking", error: null };
+          result = testFixture.appUpdate; break;
+        case "app-update-start":
+          testFixture.appUpdate = { ...testFixture.appUpdate, status: "downloading", received: 0, total: 41943040, error: null };
+          result = testFixture.appUpdate; break;
+        case "app-update-cancel":
+          testFixture.appUpdate = { ...testFixture.appUpdate, status: "available", received: 0, total: 0, error: null };
+          result = testFixture.appUpdate; break;
+        case "app-update-apply":
+          testFixture.appUpdate = { ...testFixture.appUpdate, status: "installing", error: null };
+          result = testFixture.appUpdate; break;
+        case "app-update-release": result = true; break;
         case "settings-save": Object.assign(testFixture.settings, payload); result = testFixture.settings; break;
         case "window":
           result = true;

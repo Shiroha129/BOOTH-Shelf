@@ -13,11 +13,21 @@ internal static class Program
 {
     internal static string DataDirectory = "";
     internal static bool SmokeTest;
+    internal static readonly Version AppVersion = new(typeof(Program).Assembly.GetName().Version!.ToString(3));
+    internal static string? AppUpdateReadyEvent;
 
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--apply-app-update")
+        {
+            Environment.ExitCode = AppUpdateInstaller.RunHelperAsync(args[1]).GetAwaiter().GetResult();
+            return;
+        }
         SmokeTest = args.Contains("--smoke-test");
+        var readyIndex = Array.IndexOf(args, "--app-update-ready");
+        if (readyIndex >= 0 && readyIndex + 1 < args.Length && Regex.IsMatch(args[readyIndex + 1], @"^Local\\BOOTH-Shelf-Started-app-update-[a-f0-9]{32}$"))
+            AppUpdateReadyEvent = args[readyIndex + 1];
         var dataIndex = Array.IndexOf(args, "--data-dir");
         if (args.Any(argument => argument is "--smoke-test" or "--core-test" or "--session-test" or "--session-verify" or "--tray-test")
             && (dataIndex < 0 || dataIndex + 1 >= args.Length || string.IsNullOrWhiteSpace(args[dataIndex + 1]) || args[dataIndex + 1].StartsWith("--")))
@@ -109,7 +119,7 @@ internal sealed partial class ShelfWindow : Form
 
     internal ShelfWindow()
     {
-        Text = "BOOTH Shelf v0.5.12";
+        Text = "BOOTH Shelf v" + Program.AppVersion.ToString(3);
         Size = new Size(1320, 900);
         MinimumSize = new Size(880, 620);
         StartPosition = FormStartPosition.CenterScreen;
@@ -119,10 +129,11 @@ internal sealed partial class ShelfWindow : Form
         InitializeChrome();
         InitializeBackground();
         InitializeNotifications();
+        InitializeAppUpdates();
         if (Program.SmokeTest) { Opacity = 0; ShowInTaskbar = false; }
         Shown += async (_, _) => { _ = CheckCurrencyAsync(); await InitializeAsync(); };
         FormClosing += SaveSessionOnClosing;
-        FormClosed += (_, _) => { DisposeNotifications(); DisposeBackground(); DisposeFeatures(); booth?.Dispose(); view.Dispose(); };
+        FormClosed += (_, _) => { DisposeAppUpdates(); DisposeNotifications(); DisposeBackground(); DisposeFeatures(); booth?.Dispose(); view.Dispose(); };
     }
 
     private async Task InitializeAsync()
@@ -131,7 +142,7 @@ internal sealed partial class ShelfWindow : Form
         {
             var assetDirectory = Path.Combine(Program.DataDirectory, "ui-0.5.7");
             Directory.CreateDirectory(assetDirectory);
-            foreach (var asset in new[] { "index.html", "styles.css", "app.js", "parser.js", "library-filters.js", "account-reader.js", "features.js", "filter-presets.js", "notifications.js", "i18n.js", "locales.json" })
+            foreach (var asset in new[] { "index.html", "styles.css", "app.js", "parser.js", "library-filters.js", "account-reader.js", "features.js", "filter-presets.js", "notifications.js", "app-updates.js", "i18n.js", "locales.json" })
                 File.WriteAllText(Path.Combine(assetDirectory, asset), Program.ReadAsset(asset), new UTF8Encoding(false));
             environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(Program.DataDirectory, "WebView2")).WaitAsync(TimeSpan.FromSeconds(30), lifetime.Token);
             await view.EnsureCoreWebView2Async(environment).WaitAsync(TimeSpan.FromSeconds(30), lifetime.Token);
@@ -196,6 +207,7 @@ internal sealed partial class ShelfWindow : Form
             requestId = message["id"]?.GetValue<string>();
             if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > 100) return;
             var action = message["action"]?.GetValue<string>();
+            if (appUpdateStatus == "installing" && action != "window") throw new InvalidOperationException("正在重启以安装更新…");
             object? result = action switch
             {
                 "load" => await LoadStateAsync(),
@@ -204,6 +216,11 @@ internal sealed partial class ShelfWindow : Form
                 "session-save" => await SaveLoginSessionNowAsync(),
                 "session-remember" => await SetRememberSessionAsync(message["payload"]?["enabled"]?.GetValue<bool>() == true),
                 "settings-save" => SaveSettings(message["payload"]),
+                "app-update-check" => RequestAppUpdateCheck(),
+                "app-update-start" => StartAppUpdateDownload(),
+                "app-update-cancel" => CancelAppUpdateDownload(),
+                "app-update-apply" => RequestAppUpdateApply(),
+                "app-update-release" => OpenAppUpdateRelease(),
                 "tag-pin" => SetTagPinned(message["payload"]),
                 "preset-save" => filterPresets.Save(message["payload"]),
                 "preset-delete" => filterPresets.Delete(message["payload"]?["id"]?.GetValue<string>() ?? ""),
@@ -265,6 +282,7 @@ internal sealed partial class ShelfWindow : Form
             metadata.Merge(state["snapshot"] as JsonObject);
             metadata.Merge(state["pendingSnapshot"] as JsonObject);
             state["settings"] = preferences.DeepClone();
+            state["appUpdate"] = AppUpdateState();
             state["filterPresets"] = filterPresets.List();
             state["notifications"] = NotificationState();
             state["systemLanguage"] = NativeLanguage.SystemLanguage;

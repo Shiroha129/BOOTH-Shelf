@@ -1,4 +1,7 @@
 const showcaseLanguage = new URLSearchParams(location.search).get("lang") || "zh-CN";
+if (new URLSearchParams(location.search).has("appUpdate")) testFixture.appUpdate = {
+  status: "available", currentVersion: "0.5.13", version: "0.5.14", releaseUrl: "https://example.test/releases/0.5.14"
+};
 Object.assign(testFixture.settings, { language: showcaseLanguage, pinnedTags: ["VRChat", "衣装", "アクセサリー"], currency: showcaseLanguage === "ja" ? "JPY" : showcaseLanguage === "en" ? "USD" : "CNY" });
 testFixture.testing = false;
 testFixture.snapshot.items = [

@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>BOOTH-Shelf</AssemblyName>
     <RootNamespace>BoothShelf</RootNamespace>
-    <Version>0.5.12</Version>
+    <Version>0.5.13</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -20,7 +20,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="FeatureDiagnostics.cs;BoothDiagnostics.cs" />
-    <EmbeddedResource Include="..\filter-presets.js;..\notifications.js"><LogicalName>Assets.%(Filename)%(Extension)</LogicalName></EmbeddedResource>
+    <EmbeddedResource Include="..\filter-presets.js;..\notifications.js;..\app-updates.js"><LogicalName>Assets.%(Filename)%(Extension)</LogicalName></EmbeddedResource>
     <EmbeddedResource Include="app.ico"><LogicalName>Assets.app.ico</LogicalName></EmbeddedResource>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
     <EmbeddedResource Include="..\index.html;..\styles.css;..\app.js;..\parser.js;..\page-reader.js;..\library-filters.js;..\account-reader.js;..\features.js;..\i18n.js;..\locales.json">

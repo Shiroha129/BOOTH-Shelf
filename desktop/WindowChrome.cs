@@ -44,7 +44,7 @@ internal sealed partial class ShelfWindow
         switch (action)
         {
             case "close": BeginInvoke(Close); break;
-            case "ready": interfaceReady = true; Reply(new { type = "currency", rates = currencyScheduler.Current }); break;
+            case "ready": interfaceReady = true; Reply(new { type = "currency", rates = currencyScheduler.Current }); StartAppUpdates(); break;
             case "tray": if (!closingSession) tray?.Hide(); break;
             case "exit": BeginInvoke(ExitApplication); break;
             case "minimize": WindowState = FormWindowState.Minimized; break;
