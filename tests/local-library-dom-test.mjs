@@ -51,6 +51,35 @@ check("deletedAssetDisappears", !window.document.querySelector("#grid .card") &&
 const wheel = new window.WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 500 });
 element("window-chrome").dispatchEvent(wheel);
 check("titleBarDoesNotScrollPage", wheel.defaultPrevented);
+const pointerEvent = (type, clientX, clientY, button = 0) => new window.MouseEvent(type, { bubbles: true, cancelable: true, clientX, clientY, button });
+for (const id of ["file-dialog", "local-dialog"]) {
+  const dialog = element(id);
+  dialog.getBoundingClientRect = () => ({ left: 200, right: 800, top: 150, bottom: 650 });
+  dialog.showModal();
+  dialog.dispatchEvent(pointerEvent("pointerdown", 210, 160));
+  dialog.dispatchEvent(pointerEvent("click", 210, 160));
+  check("dialogPaddingDoesNotDismiss_" + id, dialog.open);
+  dialog.dispatchEvent(pointerEvent("pointerdown", 300, 300));
+  dialog.dispatchEvent(pointerEvent("click", 100, 300));
+  check("dragOutsideDoesNotDismiss_" + id, dialog.open);
+  dialog.dispatchEvent(pointerEvent("pointerdown", 100, 300, 2));
+  dialog.dispatchEvent(pointerEvent("click", 100, 300, 2));
+  check("rightClickDoesNotDismiss_" + id, dialog.open);
+  dialog.dispatchEvent(pointerEvent("pointerdown", 100, 300));
+  dialog.dispatchEvent(pointerEvent("pointercancel", 100, 300));
+  dialog.dispatchEvent(pointerEvent("click", 100, 300));
+  check("canceledPointerDoesNotDismiss_" + id, dialog.open);
+  const child = id === "local-dialog" ? element("file-menu") : element("file-title");
+  child.hidden = false;
+  child.dispatchEvent(pointerEvent("pointerdown", 900, 300));
+  child.dispatchEvent(pointerEvent("click", 900, 300));
+  check("dialogChildOutsideBoundsDoesNotDismiss_" + id, dialog.open);
+  if (id === "local-dialog") element("file-menu").hidden = false;
+  dialog.dispatchEvent(pointerEvent("pointerdown", 100, 300));
+  dialog.dispatchEvent(pointerEvent("click", 100, 300));
+  check("backdropClickDismisses_" + id, !dialog.open);
+  if (id === "local-dialog") check("backdropCloseHidesFileMenu", element("file-menu").hidden);
+}
 for (const language of ["zh-CN", "zh-TW", "ja", "en", "ko"]) {
   window.I18n.set(language, language);
   check("translatedAssetActions_" + language, element("asset-web").textContent === window.I18n.t("打开商品网页")

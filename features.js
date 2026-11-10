@@ -319,6 +319,24 @@ element("refresh-currency").onclick = () => run(async () => {
   finally { element("refresh-currency").disabled = false; }
 });
 element("close-local").onclick = () => element("local-dialog").close();
+for (const id of ["file-dialog", "local-dialog"]) {
+  const dialog = element(id);
+  let pressedBackdrop = false;
+  const isBackdrop = event => {
+    const bounds = dialog.getBoundingClientRect();
+    return event.target === dialog && (event.clientX < bounds.left || event.clientX > bounds.right
+      || event.clientY < bounds.top || event.clientY > bounds.bottom);
+  };
+  dialog.addEventListener("pointerdown", event => { pressedBackdrop = event.button === 0 && isBackdrop(event); });
+  dialog.addEventListener("pointercancel", () => { pressedBackdrop = false; });
+  dialog.addEventListener("click", event => {
+    const dismiss = pressedBackdrop && event.button === 0 && isBackdrop(event);
+    pressedBackdrop = false;
+    if (dismiss) dialog.close();
+  });
+  dialog.addEventListener("close", () => { pressedBackdrop = false; });
+}
+element("local-dialog").addEventListener("close", () => { element("file-menu").hidden = true; });
 element("local-refresh").onclick = () => run(async () => { localFiles = await desktopRequest("local-list"); renderLocalFiles(); renderLocalCount(); if (currentView === "local") render(); });
 element("local-folder").onclick = () => { element("file-menu").hidden = true; if (localSelected) localAction(localSelected, "folder"); };
 element("local-delete").onclick = () => {

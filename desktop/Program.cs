@@ -109,7 +109,7 @@ internal sealed partial class ShelfWindow : Form
 
     internal ShelfWindow()
     {
-        Text = "BOOTH Shelf v0.5.11";
+        Text = "BOOTH Shelf v0.5.12";
         Size = new Size(1320, 900);
         MinimumSize = new Size(880, 620);
         StartPosition = FormStartPosition.CenterScreen;
