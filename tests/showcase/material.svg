@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480">
+<defs><radialGradient id="pink" cx="32%" cy="25%"><stop stop-color="#ffefed"/><stop offset=".6" stop-color="#dfa5a3"/><stop offset="1" stop-color="#aa777d"/></radialGradient><radialGradient id="blue" cx="32%" cy="25%"><stop stop-color="#edf4ff"/><stop offset=".6" stop-color="#9ab5d4"/><stop offset="1" stop-color="#6e8baa"/></radialGradient><radialGradient id="gold" cx="32%" cy="25%"><stop stop-color="#fff7dd"/><stop offset=".6" stop-color="#e4c595"/><stop offset="1" stop-color="#b89461"/></radialGradient></defs>
+<rect width="480" height="480" fill="#f0e3e8"/><circle cx="240" cy="218" r="155" fill="#f8f0f3"/>
+<ellipse cx="242" cy="324" rx="128" ry="18" fill="#ccb9c3" opacity=".4"/><circle cx="167" cy="247" r="70" fill="url(#pink)"/><circle cx="310" cy="248" r="70" fill="url(#blue)"/><circle cx="240" cy="151" r="70" fill="url(#gold)"/>
+<text x="240" y="423" font-family="Segoe UI,sans-serif" font-size="24" letter-spacing="4" text-anchor="middle" fill="#966e84">PASTEL MATERIALS</text></svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480">
+<rect width="480" height="480" fill="#e9e5f1"/><circle cx="240" cy="218" r="155" fill="#f3f0f7"/>
+<path d="M133 314c-20-133 2-202 106-207 105 2 129 79 108 207l-69 31-87-5z" fill="#8e7b9d" stroke="#6e5b81" stroke-width="5"/>
+<path d="M171 201c-10 83 22 121 69 123 47-2 80-42 69-123-19-7-47-39-69-58-22 31-43 46-69 58" fill="#ead3cb"/>
+<path d="M144 225c44-1 71-35 97-87 27 56 60 78 95 87-7-83-37-109-97-109-59 0-89 34-95 109" fill="#a08daf"/>
+<path d="M163 196v108m153-108v108M222 146l-27 63m62-64 29 66" stroke="#766389" stroke-width="5" fill="none" stroke-linecap="round"/>
+<text x="240" y="423" font-family="Segoe UI,sans-serif" font-size="24" letter-spacing="4" text-anchor="middle" fill="#6e5b81">SOFT BOB</text></svg>

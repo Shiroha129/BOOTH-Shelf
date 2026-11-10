@@ -19,6 +19,7 @@ internal static class CoreSelfTest
         try
         {
             report["language"] = LanguageSelfTest.Run(Subdirectory(run, "language"));
+            report["runtimeInstaller"] = await RuntimeInstallerSelfTest.RunAsync(Subdirectory(run, "runtime-installer"));
             report["syncEngine"] = await SyncSelfTest.RunAsync(Path.Combine(run, "sync"));
             report["metadata"] = await FeatureSelfTest.MetadataAsync(Path.Combine(run, "metadata"));
             report["metadataConcurrency"] = await MetadataConcurrencyAsync(Subdirectory(run, "metadata-parallel"));

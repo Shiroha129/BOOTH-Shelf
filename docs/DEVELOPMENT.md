@@ -18,17 +18,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File desktop/test.ps1 -Executable
 powershell -NoProfile -ExecutionPolicy Bypass -File desktop/package.ps1 -PublishDirectory dist/publish
 ```
 
-The last step creates `dist/BOOTH-Shelf-v0.5.10-win-x64.zip` and `dist/SHA256SUMS.txt`. The ZIP contains the EXE, usage instructions, the project license and required runtime notices. Packaging refuses to reuse an existing staging directory to avoid carrying stale files into a release. Choose a fresh output directory with `-OutputDirectory` when packaging again.
+The last step creates a versioned `dist/BOOTH-Shelf-v*-win-x64.zip` and `dist/SHA256SUMS.txt`. The ZIP contains the EXE, usage instructions, the project license and required runtime notices. Packaging refuses to reuse an existing staging directory to avoid carrying stale files into a release. Choose a fresh output directory with `-OutputDirectory` when packaging again.
 
 ## Tests and preview
 
-`npm test` runs offline jsdom tests for library parsing, notifications, local-asset menus, deletion confirmation, and translations. The C# core test covers synchronization, caching, ownership, purchases, currencies, notifications, download selection, and local-folder deletion boundaries using synthetic fixtures in an isolated directory. It does not log in to BOOTH or delete personal assets. Native Recycle Bin interaction and actual WebView2 layout require manual verification.
+`npm test` runs offline jsdom tests for library parsing, notifications, local-asset menus, deletion confirmation, and translations. The C# core test covers synchronization, caching, ownership, purchases, currencies, notifications, download selection, local-folder deletion boundaries, and runtime installer control flow using synthetic fixtures in an isolated directory. It does not log in to BOOTH, delete personal assets, or execute a real runtime installer. Native Recycle Bin interaction and installation on a Windows machine without WebView2 require manual verification.
 
 ```powershell
 npm run preview
 ```
 
 Open `http://127.0.0.1:5185/?tests=1` for the synthetic browser regression fixture, or `http://127.0.0.1:5185/?scroll=1` for scrolling checks. The server binds only to localhost and serves an explicit file allowlist. Preview downloads are mocked and do not contact a real account.
+
+For documentation screenshots, open `http://127.0.0.1:5185/?showcase=1`, adding `&lang=ja` or `&lang=en` for another language. This runs the actual front end with synthetic library data and original SVG illustrations from `tests/showcase/`. Screenshots in `docs/images/` use the desktop app's default 1320 × 900 window size; the library view is captured beyond the first fold and cropped after its first row. Demo scripts and illustrations are not embedded in the desktop EXE.
+
+The first-run runtime setup uses Microsoft's Evergreen Bootstrapper URL and the documented `/silent /install` arguments. It validates the downloaded file with Windows Authenticode trust and a Microsoft Corporation publisher check before execution. The package does not bundle a browser runtime; offline users can use Microsoft's Evergreen Standalone Installer. Reference: [Microsoft WebView2 distribution guide](https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution).
 
 For manual desktop checks, launch the EXE with an isolated directory, for example `--data-dir test-data-manual`. Keep all authentication, cache, export and download files out of commits. The deprecated account-inspection tools and real-account research samples are not included in this repository.
 

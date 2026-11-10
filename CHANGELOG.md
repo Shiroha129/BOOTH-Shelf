@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.11 — 2026-11-10
+
+- Detect WebView2 before startup. When missing, offer an explicit install button that downloads Microsoft's official bootstrapper, verifies its Authenticode signature and publisher, installs the runtime and checks availability again before opening the app.
+- Keep download cancellation, retry and a manual download link available; existing installations skip setup entirely.
+- Add concise Chinese, Japanese and English introductions with screenshots of the locally running UI using synthetic data and original demo illustrations.
+
 ## 0.5.10 — 2026-11-10
 
 First public preview release.

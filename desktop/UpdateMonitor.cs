@@ -34,7 +34,7 @@ internal sealed partial class UpdateMonitor : IDisposable
         schedulePath = Path.Combine(root, "update-monitor-state.json");
         client = handler == null ? new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) : new HttpClient(handler);
         client.Timeout = TimeSpan.FromSeconds(25);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("BOOTH-Shelf/0.5.10");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("BOOTH-Shelf/0.5.11");
         if (File.Exists(historyPath)) foreach (var line in File.ReadLines(historyPath))
         {
             journalEntries++;

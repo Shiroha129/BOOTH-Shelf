@@ -59,7 +59,12 @@ internal static class Program
         Application.ThreadException += (_, eventArgs) => ReportFailure(eventArgs.Exception);
         try
         {
-            _ = CoreWebView2Environment.GetAvailableBrowserVersionString();
+            if (!RuntimeInstaller.IsAvailable())
+            {
+                if (SmokeTest) throw new WebView2RuntimeNotFoundException();
+                using var setup = new RuntimeSetupDialog();
+                if (setup.ShowDialog() != DialogResult.OK) return;
+            }
             Application.Run(new ShelfWindow());
         }
         catch (Exception error)
@@ -104,7 +109,7 @@ internal sealed partial class ShelfWindow : Form
 
     internal ShelfWindow()
     {
-        Text = "BOOTH Shelf v0.5.10";
+        Text = "BOOTH Shelf v0.5.11";
         Size = new Size(1320, 900);
         MinimumSize = new Size(880, 620);
         StartPosition = FormStartPosition.CenterScreen;
