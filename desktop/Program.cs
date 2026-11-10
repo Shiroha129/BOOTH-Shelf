@@ -216,6 +216,7 @@ internal sealed partial class ShelfWindow : Form
                 "session-save" => await SaveLoginSessionNowAsync(),
                 "session-remember" => await SetRememberSessionAsync(message["payload"]?["enabled"]?.GetValue<bool>() == true),
                 "settings-save" => SaveSettings(message["payload"]),
+                "booth-access-resume" => ResumeBoothAccess(),
                 "app-update-check" => RequestAppUpdateCheck(),
                 "app-update-start" => StartAppUpdateDownload(),
                 "app-update-cancel" => CancelAppUpdateDownload(),
@@ -282,6 +283,7 @@ internal sealed partial class ShelfWindow : Form
             metadata.Merge(state["snapshot"] as JsonObject);
             metadata.Merge(state["pendingSnapshot"] as JsonObject);
             state["settings"] = preferences.DeepClone();
+            state["boothAccess"] = boothAccess.State();
             state["appUpdate"] = AppUpdateState();
             state["filterPresets"] = filterPresets.List();
             state["notifications"] = NotificationState();

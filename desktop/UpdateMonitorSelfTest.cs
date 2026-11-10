@@ -101,7 +101,7 @@ internal static class UpdateMonitorSelfTest
         internal void Update(int id, DateTimeOffset time, int variant = 0) => Handler.Get(id)["variations"]![variant]!["downloadables"]![0]!["updated_at"] = time.ToString("O");
         internal async Task Round(UpdateMonitor monitor)
         {
-            Time = Time.AddMinutes(16);
+            Time = Time.AddMinutes(61);
             await monitor.CheckBatchAsync(Read, CancellationToken.None);
         }
     }
@@ -238,6 +238,46 @@ internal static class UpdateMonitorSelfTest
         Check(LibraryOwnership.Versions(combined).SequenceEqual(new[] { "11", "12" }), "跨来源拥有版本未合并");
     }
 
+    internal static async Task<JsonObject> DownloadedAsync(string root)
+    {
+        var fixture = new Fixture();
+        using var monitor = new UpdateMonitor(root, fixture.Handler, () => fixture.Time);
+        monitor.SetInterval(60);
+        JsonArray Files(params int[] ids) => new(ids.Select(id => (JsonNode)new JsonObject { ["itemId"] = id.ToString() }).ToArray());
+        monitor.SetDownloadedLibrary(fixture.Library, Files(1, 1, 41, 81));
+        Check(monitor.State()["total"]!.GetValue<int>() == 3, "下载范围未按资产去重");
+        await monitor.CheckBatchAsync(fixture.Read, CancellationToken.None);
+        var changed = fixture.Time.AddMinutes(1);
+        foreach (var id in new[] { 1, 2, 41, 42, 81, 82 }) fixture.Update(id, changed);
+        await fixture.Round(monitor);
+        var ids = monitor.State()["items"]!.AsArray().Select(item => item!["itemId"]!.ToString()).Order().ToArray();
+        Check(ids.SequenceEqual(new[] { "1", "41", "81" }), "未下载的资产产生了更新通知");
+        monitor.SetDownloadedLibrary(fixture.Library, Files(41));
+        Check(monitor.State()["items"]!.AsArray().Count == 1, "删除本地资产后仍显示旧通知");
+        monitor.SetInterval(180);
+        fixture.Reads.Clear();
+        await fixture.Round(monitor);
+        Check(fixture.Reads.Count == 0 && monitor.State()["intervalMinutes"]!.GetValue<int>() == 180, "修改检查间隔没有推迟下一次请求");
+        var invalid = false;
+        try { monitor.SetInterval(1); } catch (InvalidDataException) { invalid = true; }
+        Check(invalid, "接受了过短的自定义检查间隔");
+        monitor.SetDownloadedLibrary(fixture.Library, Files());
+        fixture.Time = fixture.Time.AddDays(2);
+        Check(!await monitor.CheckBatchAsync(fixture.Read, CancellationToken.None) && fixture.Reads.Count == 0 && !monitor.Due,
+            "没有已下载资产时仍执行后台检查");
+        fixture.Update(1, fixture.Time.AddMinutes(-1));
+        monitor.SetDownloadedLibrary(fixture.Library, Files(1));
+        var oldCount = monitor.State()["items"]!.AsArray().Count;
+        await monitor.CheckBatchAsync(fixture.Read, CancellationToken.None);
+        Check(monitor.State()["items"]!.AsArray().Count == oldCount, "重新下载资产时误报未监测期间的历史更新");
+        fixture.Update(1, fixture.Time.AddMinutes(1));
+        fixture.Time = fixture.Time.AddMinutes(181);
+        await monitor.CheckBatchAsync(fixture.Read, CancellationToken.None);
+        Check(monitor.State()["items"]!.AsArray().Count == oldCount + 1, "重新加入已下载资产后新更新未通知");
+        return new JsonObject { ["downloadedOnly"] = true, ["deduplicated"] = true, ["removedAssetsHidden"] = true,
+            ["intervalChangeReschedules"] = true, ["emptyLocalLibraryIdle"] = true, ["redownloadBaseline"] = true };
+    }
+
     private static async Task BoundaryCasesAsync(string root)
     {
         Directory.CreateDirectory(root);
@@ -266,7 +306,7 @@ internal static class UpdateMonitorSelfTest
         await fixture.Round(monitor);
         Check(monitor.State()["items"]!.AsArray().Count == notices, "相同时刻的不同时区表示重复通知");
         var watermark = JsonNode.Parse(System.IO.File.ReadAllText(Path.Combine(root, "update-monitor-state.json")))!["sections"]!["bought"]!["through"]!.ToString();
-        fixture.Time = fixture.Time.AddMinutes(16);
+        fixture.Time = fixture.Time.AddMinutes(61);
         using var cancellation = new CancellationTokenSource();
         async Task<JsonObject> CancelRead(string url, CancellationToken token)
         {

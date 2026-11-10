@@ -14,6 +14,10 @@ internal sealed partial class UpdateMonitor : IDisposable
     private readonly string schedulePath;
     private readonly HttpClient client;
     private readonly Func<DateTimeOffset> now;
+    private readonly BoothRequestPolicy? access;
+    private int intervalMinutes = 60;
+    private bool downloadedOnly;
+    internal static readonly int[] Intervals = [30, 60, 180, 360, 1440];
     private readonly Dictionary<string, JsonObject> records = new();
     private Dictionary<string, JsonObject> targets = new();
     private readonly JsonObject schedule;
@@ -23,11 +27,14 @@ internal sealed partial class UpdateMonitor : IDisposable
     private int notificationRevision;
     private int journalEntries;
     internal bool Busy { get; private set; }
+    internal bool Due => !Busy && targets.Count > 0 && RetryAfter <= now()
+        && LibraryCoordinator.Sections.Any(section => Date(sections[section.Id]?["nextAt"]) <= now());
     internal event Action<int>? NewNotifications;
     internal event Action? Progress;
 
-    internal UpdateMonitor(string root, HttpMessageHandler? handler = null, Func<DateTimeOffset>? clock = null)
+    internal UpdateMonitor(string root, HttpMessageHandler? handler = null, Func<DateTimeOffset>? clock = null, BoothRequestPolicy? access = null)
     {
+        this.access = access;
         now = clock ?? (() => DateTimeOffset.UtcNow);
         historyPath = Path.Combine(root, "update-monitor.jsonl");
         noticesPath = Path.Combine(root, "notifications.json");
@@ -58,6 +65,39 @@ internal sealed partial class UpdateMonitor : IDisposable
     private DateTimeOffset RetryAfter => Date(schedule["retryAt"]);
     private void SaveSchedule() => SyncCache.AtomicWrite(schedulePath, schedule.ToJsonString());
 
+    internal void SetInterval(int minutes)
+    {
+        if (!Intervals.Contains(minutes)) throw new InvalidDataException("通知检查间隔无效");
+        intervalMinutes = minutes;
+        if (schedule["intervalMinutes"]?.GetValue<int>() == minutes) return;
+        foreach (var state in sections.Select(entry => entry.Value).OfType<JsonObject>())
+        {
+            var last = Date(state["lastAt"]);
+            if (last != DateTimeOffset.MinValue) state["nextAt"] = last.AddMinutes(minutes).ToString("O");
+        }
+        schedule["intervalMinutes"] = minutes;
+        SaveSchedule();
+    }
+
+    internal void SetDownloadedLibrary(JsonObject? snapshot, JsonArray localFiles)
+    {
+        downloadedOnly = true;
+        var ids = localFiles.OfType<JsonObject>().Select(file => file["itemId"]?.ToString()).Where(id => id != null).ToHashSet();
+        var items = (snapshot?["items"] as JsonArray ?? new JsonArray()).OfType<JsonObject>()
+            .Where(item => ids.Contains(item["id"]?.ToString())).Select(item => (JsonNode)item.DeepClone()).ToArray();
+        foreach (var item in items)
+        {
+            var id = item["id"]!.ToString();
+            if (!members.ContainsKey(id) && records.TryGetValue(id, out var record))
+            {
+                record.Remove("versions");
+                record.Remove("etag");
+                SaveRecord(record);
+            }
+        }
+        SetLibrary(new JsonObject { ["items"] = new JsonArray(items) });
+    }
+
     internal void SetLibrary(JsonObject? snapshot)
     {
         targets = (snapshot?["items"] as JsonArray ?? new JsonArray()).OfType<JsonObject>()
@@ -81,7 +121,8 @@ internal sealed partial class UpdateMonitor : IDisposable
         var next = states.Select(state => Date(state?["nextAt"])).Min();
         return new JsonObject
         {
-            ["items"] = notices.DeepClone(), ["total"] = targets.Count, ["busy"] = Busy, ["mode"] = "incremental",
+            ["items"] = new JsonArray(notices.OfType<JsonObject>().Where(notice => !downloadedOnly || targets.ContainsKey(notice["itemId"]!.ToString())).Select(notice => (JsonNode)notice.DeepClone()).ToArray()),
+            ["total"] = targets.Count, ["busy"] = Busy, ["mode"] = "incremental", ["intervalMinutes"] = intervalMinutes, ["downloadedOnly"] = downloadedOnly,
             ["sourcesReady"] = states.Count(state => Date(state?["through"]) != DateTimeOffset.MinValue),
             ["checked"] = states.Sum(state => state?["checked"]?.GetValue<int>() ?? 0),
             ["pages"] = states.Sum(state => state?["pages"]?.GetValue<int>() ?? 0),
@@ -128,7 +169,7 @@ internal sealed partial class UpdateMonitor : IDisposable
             var scopeUnchanged = !targets.ContainsKey(id) || owned.Length > 0 && owned.SequenceEqual((record?["owned"] as JsonArray ?? new JsonArray()).Select(value => value!.ToString()));
             if (row["section"]?.ToString() != "free" && scopeUnchanged && record?["latestFileAt"] != null && record["etag"]?.ToString() is { Length: > 0 } etag)
                 request.Headers.TryAddWithoutValidation("If-None-Match", etag);
-            using var response = await client.SendAsync(request, token);
+            using var response = await (access == null ? client.SendAsync(request, token) : access.SendAsync(client, request, token));
             if ((int)response.StatusCode == 429 || (int)response.StatusCode >= 500)
             {
                 var wait = response.Headers.RetryAfter?.Delta ?? response.Headers.RetryAfter?.Date - now() ?? TimeSpan.FromMinutes(5);
@@ -141,6 +182,7 @@ internal sealed partial class UpdateMonitor : IDisposable
             return new(id, Data: data, Etag: response.Headers.ETag?.ToString());
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+        catch (BoothAccessPausedException) { throw; }
         catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException or System.Text.Json.JsonException or InvalidOperationException or TaskCanceledException)
         { return new(id, Failed: true); }
     }
@@ -178,6 +220,8 @@ internal sealed partial class UpdateMonitor : IDisposable
                 var versions = FileVersions(result.Data, id, owned);
                 var previous = record["versions"] as JsonObject;
                 var member = members[id]!.AsObject();
+                var initializeDownload = downloadedOnly && member["since"] == null;
+                member["since"] ??= observedAt.ToString("O");
                 var changed = new HashSet<string>();
                 foreach (var variant in versions)
                 {
@@ -187,7 +231,7 @@ internal sealed partial class UpdateMonitor : IDisposable
                         if (oldFiles != null ? !JsonNode.DeepEquals(oldFiles[file.Key], file.Value) : Date(file.Value?["updatedAt"]) > since)
                             changed.Add(file.Key);
                 }
-                if (changed.Count > 0) AddNotice(item, versions, changed);
+                if (changed.Count > 0 && !initializeDownload) AddNotice(item, versions, changed);
                 record["versions"] = versions;
                 record["owned"] = new JsonArray(owned.Select(value => (JsonNode)JsonValue.Create(value)!).ToArray());
                 foreach (var version in owned)

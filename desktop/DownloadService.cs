@@ -7,7 +7,7 @@ using Microsoft.Web.WebView2.WinForms;
 
 namespace BoothShelf;
 
-internal sealed class SessionBrowser : IDisposable
+internal sealed class SessionBrowser(BoothRequestPolicy? access = null) : IDisposable
 {
     private sealed class BackgroundWindow : Form
     {
@@ -31,9 +31,17 @@ internal sealed class SessionBrowser : IDisposable
 
     internal async Task NavigateAsync(string url, CancellationToken token)
     {
+        if (access == null) await NavigateCoreAsync(url, token);
+        else await access.RunAsync(() => NavigateCoreAsync(url, token), token);
+    }
+
+    private async Task<bool> NavigateCoreAsync(string url, CancellationToken token)
+    {
         var completion = new TaskCompletionSource<bool>();
         void Completed(object? sender, CoreWebView2NavigationCompletedEventArgs args)
         {
+            try { access?.Inspect(args.HttpStatusCode); }
+            catch (Exception error) { completion.TrySetException(error); return; }
             if (!args.IsSuccess || args.HttpStatusCode >= 400) completion.TrySetException(new IOException($"BOOTH 页面加载失败（HTTP {args.HttpStatusCode}）。请重新登录或稍后重试。"));
             else completion.TrySetResult(true);
         }
@@ -42,6 +50,8 @@ internal sealed class SessionBrowser : IDisposable
         {
             View.CoreWebView2.Navigate(url);
             await completion.Task.WaitAsync(TimeSpan.FromSeconds(45), token);
+            if (access != null) access.Inspect(200, await View.ExecuteScriptAsync(BoothRequestPolicy.ChallengeScript) == "true");
+            return true;
         }
         finally { View.CoreWebView2.NavigationCompleted -= Completed; }
     }
@@ -56,6 +66,7 @@ internal sealed class DownloadService : IDisposable
     private readonly Func<Task<CoreWebView2Environment>> environment;
     private readonly Func<string> downloadDirectory;
     private readonly Action<SessionBrowser>? configureSession;
+    private readonly BoothRequestPolicy? access;
     private readonly Dictionary<string, Selection> selections = new();
     private readonly Queue<(JsonObject Record, string Url, string Directory)> queue = new();
     private readonly JsonArray history;
@@ -83,8 +94,9 @@ internal sealed class DownloadService : IDisposable
     }
 
     internal DownloadService(string root, Func<Task<CoreWebView2Environment>> environment, Func<string> directory, CancellationToken token,
-        Action<SessionBrowser>? configureSession = null)
+        Action<SessionBrowser>? configureSession = null, BoothRequestPolicy? access = null)
     {
+        this.access = access;
         historyPath = Path.Combine(root, "downloads.json");
         this.environment = environment;
         downloadDirectory = directory;
@@ -134,7 +146,7 @@ internal sealed class DownloadService : IDisposable
             }
             if (listing == null)
             {
-                var pendingSession = new SessionBrowser();
+                var pendingSession = new SessionBrowser(access);
                 try
                 {
                     await pendingSession.InitializeAsync(await environment());
@@ -239,6 +251,11 @@ internal sealed class DownloadService : IDisposable
 
     private void Emit() => Changed?.Invoke(new { type = "downloads", items = History });
 
+    internal void ResumePending()
+    {
+        if (!working && queue.Count > 0) _ = RunAsync();
+    }
+
     private async Task RunAsync()
     {
         working = true;
@@ -253,9 +270,10 @@ internal sealed class DownloadService : IDisposable
                 currentId = record["id"]!.GetValue<string>();
                 try
                 {
+                    access?.ThrowIfPaused();
                     if (downloader == null)
                     {
-                        downloader = new SessionBrowser();
+                        downloader = new SessionBrowser(access);
                         await downloader.InitializeAsync(await environment());
                         configureSession?.Invoke(downloader);
                         downloader.View.CoreWebView2.DownloadStarting += (_, args) =>
@@ -267,13 +285,21 @@ internal sealed class DownloadService : IDisposable
                             pending.Operation = args.DownloadOperation;
                             pending.Started.TrySetResult(args.DownloadOperation);
                         };
-                        downloader.View.CoreWebView2.NavigationCompleted += (_, args) =>
+                        downloader.View.CoreWebView2.NavigationCompleted += async (_, args) =>
                         {
-                            if (pending == null || pending.Started.Task.IsCompleted) return;
+                            var current = pending;
+                            if (current == null || current.Started.Task.IsCompleted) return;
+                            try
+                            {
+                                access?.Inspect(args.HttpStatusCode);
+                                if (access != null && args.IsSuccess)
+                                    access.Inspect(args.HttpStatusCode, await downloader.View.ExecuteScriptAsync(BoothRequestPolicy.ChallengeScript) == "true");
+                            }
+                            catch (Exception error) { current.Started.TrySetException(error); return; }
                             if (args.HttpStatusCode >= 400)
-                                pending.Started.TrySetException(new IOException($"BOOTH 下载入口返回 HTTP {args.HttpStatusCode}，请重新登录或稍后重试。"));
+                                current.Started.TrySetException(new IOException($"BOOTH 下载入口返回 HTTP {args.HttpStatusCode}，请重新登录或稍后重试。"));
                             else if (args.IsSuccess)
-                                pending.Started.TrySetException(new IOException("BOOTH 返回了网页，未返回下载文件。请在设置中重新登录，或打开商品页确认下载权限。"));
+                                current.Started.TrySetException(new IOException("BOOTH 返回了网页，未返回下载文件。请在设置中重新登录，或打开商品页确认下载权限。"));
                         };
                     }
                     var directory = Path.Combine(entry.Directory, SafeName(record["itemId"]!.GetValue<string>() + "_" + record["title"]!.GetValue<string>()));
@@ -286,8 +312,12 @@ internal sealed class DownloadService : IDisposable
                     Emit();
                     var started = new TaskCompletionSource<CoreWebView2DownloadOperation>();
                     pending = new PendingDownload(record, target + ".part", started);
-                    downloader.View.CoreWebView2.Navigate(entry.Url);
-                    var operation = await started.Task.WaitAsync(TimeSpan.FromSeconds(45), cancellation.Token);
+                    async Task<CoreWebView2DownloadOperation> Start()
+                    {
+                        downloader.View.CoreWebView2.Navigate(entry.Url);
+                        return await started.Task.WaitAsync(TimeSpan.FromSeconds(45), cancellation.Token);
+                    }
+                    var operation = await (access == null ? Start() : access.RunAsync(Start, cancellation.Token));
                     var completed = new TaskCompletionSource<bool>();
                     var lastUpdate = Stopwatch.StartNew();
                     void Progress(object? sender, object args)
@@ -321,6 +351,11 @@ internal sealed class DownloadService : IDisposable
                         if (operation.State == CoreWebView2DownloadState.InProgress) operation.Cancel();
                     }
                 }
+                catch (BoothAccessPausedException)
+                {
+                    record["state"] = "queued";
+                    queue.Enqueue(entry);
+                }
                 catch (OperationCanceledException) { record["state"] = "canceled"; }
                 catch (Exception error)
                 {
@@ -341,7 +376,7 @@ internal sealed class DownloadService : IDisposable
                     Save();
                     Emit();
                 }
-                if (lifetime.IsCancellationRequested) break;
+                if (lifetime.IsCancellationRequested || access?.Paused == true) break;
             }
         }
         catch (Exception error)

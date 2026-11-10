@@ -15,6 +15,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .brand { display: flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 700; letter-spacing: -.4px; }
 .brand { cursor: default; user-select: none; }
 .notification-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.booth-access-banner { display: flex; align-items: center; gap: 20px; padding: 12px 18px; margin-bottom: 20px; border: 1px solid #ebcd93; border-radius: 8px; background: #fff7e8; }
+.booth-access-banner p { flex: 1; margin: 0; line-height: 1.7; }
+.booth-access-banner button { flex-shrink: 0; }
 .notification-toolbar p { margin-right: auto; }
 #notification-count { background: var(--accent); color: white; border-radius: 10px; padding: 2px 7px; }
 .notification-card { background: white; border: 1px solid var(--line); border-left: 3px solid var(--accent); padding: 20px 24px; margin-top: 16px; border-radius: 8px; }

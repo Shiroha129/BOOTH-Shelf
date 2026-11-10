@@ -77,7 +77,7 @@ internal static class FreeOwnershipSelfTest
             && monitor.State()["items"]!.AsArray().Count == 0 && handler.Calls == 4, "免费库未恢复正常或额外扫描历史页");
         var record = File.ReadLines(Path.Combine(root, "update-monitor.jsonl")).Select(line => JsonNode.Parse(line)!).Last(value => value["id"]!.ToString() == "1");
         Check(record["owned"]!.AsArray().Select(value => value!.ToString()).SequenceEqual(new[] { "11", "12" }), "旧版已确认的付费版本未保留或免费版本未添加");
-        time = time.AddMinutes(16);
+        time = time.AddMinutes(61);
         data[1]["variations"]![0]!["downloadables"]![0]!["updated_at"] = time.ToString("O");
         data[1]["variations"]![1]!["downloadables"]![0]!["updated_at"] = time.ToString("O");
         data[1]["variations"]![2]!["downloadables"]![0]!["updated_at"] = time.ToString("O");
@@ -86,7 +86,7 @@ internal static class FreeOwnershipSelfTest
         var notices = monitor.State()["items"]!.AsArray();
         Check(notices.Count == 1 && notices[0]!["files"]!.AsArray().Select(file => file!.ToString()).SequenceEqual(new[] { "11.zip", "12.zip" }),
             "已确认版本更新漏报或其他免费/付费版本误报");
-        time = time.AddMinutes(16);
+        time = time.AddMinutes(61);
         rows[3]["libraryLabels"] = new JsonArray("Multiple (Unknown)");
         await monitor.CheckBatchAsync(Read, CancellationToken.None);
         var source = monitor.State()["sources"]!.AsArray().First(value => value!["id"]!.ToString() == "free")!;

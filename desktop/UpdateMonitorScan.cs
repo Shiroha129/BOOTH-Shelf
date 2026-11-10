@@ -7,7 +7,7 @@ internal sealed partial class UpdateMonitor
 {
     internal async Task<bool> CheckBatchAsync(Func<string, CancellationToken, Task<JsonObject>> readLibrary, CancellationToken token)
     {
-        if (Busy || targets.Count == 0 || RetryAfter > now()) return false;
+        if (Busy || targets.Count == 0 || RetryAfter > now() || access?.Paused == true) return false;
         var due = LibraryCoordinator.Sections.Where(section => Date(sections[section.Id]?["nextAt"]) <= now()).ToArray();
         if (due.Length == 0) return false;
         Busy = true;
@@ -27,10 +27,11 @@ internal sealed partial class UpdateMonitor
                 state["ownership"] = 0;
                 try { await ScanSectionAsync(section.Url, state, readLibrary, metadata, token); }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+                catch (BoothAccessPausedException) { throw; }
                 catch (Exception error) when (error is SyncReadException or IOException or InvalidDataException or InvalidOperationException or JsonException or FormatException)
                 {
                     state["error"] = true;
-                    state["nextAt"] = now().AddMinutes(5).ToString("O");
+                    state["nextAt"] = now().AddMinutes(intervalMinutes).ToString("O");
                     if (error is SyncReadException { Retryable: true } readError)
                     {
                         var retry = now().AddMilliseconds(Math.Max(300000, readError.RetryAfterMs));
@@ -126,7 +127,7 @@ internal sealed partial class UpdateMonitor
             if (!dated || page.Next == null) throw new InvalidDataException("更新排序分页不完整");
         }
         state["error"] = failed.Count > 0;
-        state["nextAt"] = now().AddMinutes(failed.Count > 0 ? 5 : 15).ToString("O");
+        state["nextAt"] = now().AddMinutes(intervalMinutes).ToString("O");
         if (failed.Count == 0)
         {
             state["through"] = (started > previous ? started : previous).ToString("O");

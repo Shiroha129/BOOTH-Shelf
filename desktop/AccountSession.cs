@@ -5,9 +5,9 @@ using Microsoft.Web.WebView2.Core;
 
 namespace BoothShelf;
 
-internal sealed class AccountSession : IDisposable
+internal sealed class AccountSession(BoothRequestPolicy? access = null) : IDisposable
 {
-    private readonly SessionBrowser browser = new();
+    private readonly SessionBrowser browser = new(access);
     private readonly RequestGate requests = new(8);
 
     internal async Task InitializeAsync(CoreWebView2Environment environment, CancellationToken token, Action<SessionBrowser>? configure = null)
@@ -34,7 +34,7 @@ internal sealed class AccountSession : IDisposable
     {
         for (var attempt = 0; ; attempt++)
         {
-            try { return await requests.RunAsync(() => OnceAsync(target, kind, token), token); }
+            try { return await requests.RunAsync(() => access == null ? OnceAsync(target, kind, token) : access.RunAsync(() => OnceAsync(target, kind, token), token), token); }
             catch (SyncReadException error) when (error.Retryable && retry)
             {
                 requests.Backoff(Math.Max(error.RetryAfterMs, 3000 * (1 << attempt)));
@@ -56,6 +56,8 @@ internal sealed class AccountSession : IDisposable
                 await Task.Delay(100, token);
                 var result = JsonNode.Parse(await browser.View.ExecuteScriptAsync($"AccountReader.take({key});"));
                 if (result == null) continue;
+                access?.Inspect(result["status"]?.GetValue<int>() ?? 0, result["challenge"]?.GetValue<bool>() == true,
+                    TimeSpan.FromMilliseconds(result["retryAfterMs"]?.GetValue<int>() ?? 0));
                 if (result["error"] != null)
                     throw new SyncReadException(result["error"]!.GetValue<string>(), result["retryable"]?.GetValue<bool>() == true, result["retryAfterMs"]?.GetValue<int>() ?? 0);
                 return result["data"]!.AsObject();

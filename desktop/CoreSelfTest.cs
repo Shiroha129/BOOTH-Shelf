@@ -30,12 +30,14 @@ internal static class CoreSelfTest
             report["purchases"] = await PurchasesAsync(Subdirectory(run, "purchases"));
             report["parallelPurchases"] = await ConcurrencySelfTest.PurchasesAsync(Subdirectory(run, "parallel-purchases"));
             report["requestGate"] = await ConcurrencySelfTest.RequestsAsync();
+            report["boothAccess"] = await BoothRequestPolicySelfTest.RunAsync(Subdirectory(run, "booth-access"));
             report["localFiles"] = LocalFiles(Subdirectory(run, "local"));
             report["localAssets"] = LocalAssetSelfTest.Run(Subdirectory(run, "local-assets"));
             report["currency"] = await CurrencyAsync(Subdirectory(run, "currency"));
             report["currencySchedule"] = await CurrencyScheduleSelfTest.RunAsync(Subdirectory(run, "currency-schedule"));
             report["filterPresets"] = FilterPresetSelfTest.Run(Subdirectory(run, "filter-presets"));
             report["updateNotifications"] = await UpdateMonitorSelfTest.RunAsync(Subdirectory(run, "notifications"));
+            report["downloadedNotifications"] = await UpdateMonitorSelfTest.DownloadedAsync(Subdirectory(run, "downloaded-notifications"));
             report["freeOwnership"] = await FreeOwnershipSelfTest.RunAsync(Subdirectory(run, "free-ownership"));
             report["downloadSelection"] = await DownloadSelectionAsync(Subdirectory(run, "download-selection"));
             report["passed"] = true;

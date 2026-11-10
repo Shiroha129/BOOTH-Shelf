@@ -1,6 +1,6 @@
 namespace BoothShelf;
 
-internal sealed class RequestGate(int concurrency, Func<int, CancellationToken, Task>? delay = null, Func<DateTimeOffset>? clock = null)
+internal sealed class RequestGate(int concurrency, Func<int, CancellationToken, Task>? delay = null, Func<DateTimeOffset>? clock = null, int intervalMilliseconds = 0)
 {
     private readonly object gate = new();
     private readonly Func<int, CancellationToken, Task> wait = delay ?? ((milliseconds, token) => Task.Delay(milliseconds, token));
@@ -8,6 +8,7 @@ internal sealed class RequestGate(int concurrency, Func<int, CancellationToken, 
     private int limit = concurrency > 0 ? concurrency : throw new ArgumentOutOfRangeException(nameof(concurrency));
     private int active;
     private DateTimeOffset resumeAt;
+    private DateTimeOffset nextStart;
     private TaskCompletionSource changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     internal async Task<T> RunAsync<T>(Func<Task<T>> action, CancellationToken token)
@@ -19,8 +20,14 @@ internal sealed class RequestGate(int concurrency, Func<int, CancellationToken, 
             lock (gate)
             {
                 token.ThrowIfCancellationRequested();
-                milliseconds = (int)Math.Clamp(Math.Ceiling((resumeAt - now()).TotalMilliseconds), 0, int.MaxValue);
-                if (milliseconds == 0 && active < limit) { active++; break; }
+                var readyAt = resumeAt > nextStart ? resumeAt : nextStart;
+                milliseconds = (int)Math.Clamp(Math.Ceiling((readyAt - now()).TotalMilliseconds), 0, int.MaxValue);
+                if (milliseconds == 0 && active < limit)
+                {
+                    active++;
+                    nextStart = now().AddMilliseconds(Math.Max(0, intervalMilliseconds));
+                    break;
+                }
                 pending = changed.Task;
             }
             if (milliseconds > 0) await wait(milliseconds, token);

@@ -9,6 +9,7 @@ internal sealed partial class ShelfWindow
     {
         if (syncing) throw new InvalidOperationException("同步正在进行，请稍后重试。");
         if (mode is not ("full" or "quick")) throw new InvalidDataException("同步模式无效");
+        boothAccess.ThrowIfPaused();
         syncing = true;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         syncCancellation = cancellation;
@@ -18,7 +19,7 @@ internal sealed partial class ShelfWindow
         {
             await PauseUpdateChecksAsync();
             Reply(new { type = "updates", state = NotificationState() });
-            using var session = new AccountSession();
+            using var session = new AccountSession(boothAccess);
             await session.InitializeAsync(environment!, token);
             await ObserveSessionAuthenticationAsync(true);
             Reply(new { type = "auth", authenticated = true });
@@ -48,7 +49,7 @@ internal sealed partial class ShelfWindow
                 var state = ReadState();
                 state["snapshot"] = resultSnapshot.DeepClone();
                 WriteState(state);
-                updateMonitor.SetLibrary(resultSnapshot);
+                RefreshNotificationLibrary(resultSnapshot);
                 foreach (var section in LibraryCoordinator.Sections) SyncCache.Load(Path.Combine(Program.DataDirectory, "sections", section.Id))?.Finish();
             }
             finally { storageLock.Release(); }

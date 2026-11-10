@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0 — 2026-11-10
+
+- Pace BOOTH requests and pause automatic access when the site restricts it.
+- Limit update alerts to downloaded assets, with an adjustable check interval.
+
 ## 0.5.13 — 2026-11-10
 
 - Check GitHub for new versions and download, verify and install updates from the app.

@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>BOOTH-Shelf</AssemblyName>
     <RootNamespace>BoothShelf</RootNamespace>
-    <Version>0.5.13</Version>
+    <Version>1.0.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

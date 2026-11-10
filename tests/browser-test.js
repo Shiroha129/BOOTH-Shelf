@@ -400,7 +400,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     element("notifications-view").click();
     await wait(() => document.querySelector(".notification-card"));
     check("notificationsHaveEntryAndUnreadCount", currentView === "notifications" && element("notification-count").textContent === "1" && !element("notification-count").hidden);
-    check("incrementalCheckStatus", element("notification-status").textContent.includes("15") && element("notification-coverage").textContent.includes("3 / 3") && element("notification-coverage").textContent.includes("上次完成"));
+    check("incrementalCheckStatus", element("notification-status").textContent.includes("60") && element("notification-coverage").textContent.includes("3 / 3") && element("notification-coverage").textContent.includes("上次完成"));
     check("notificationsListChangedFiles", document.querySelectorAll(".notification-card li").length === 2);
     document.querySelector(".notification-card button").click();
     await wait(() => element("notification-count").hidden);

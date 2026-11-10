@@ -38,6 +38,10 @@ For manual desktop checks, launch the EXE with an isolated directory, for exampl
 
 ## Structure
 
+Automated BOOTH page reads, metadata, update metadata, authentication probes and download entry requests share one `BoothRequestPolicy`: at most four active requests, with starts at least 250 ms apart. Browser subresources and user interactions in the official login window are not counted as separate scheduler operations. HTTP 403/429 and recognized verification pages pause new work until the user resumes; `Retry-After` is respected, with minimum cooldowns of 10 minutes for 429 and 5 minutes for access denial/verification. Pause state survives restarts. These are engineering defaults, not BOOTH-approved rate limits. See [BOOTH's scraping guidelines](https://booth.pm/guidelines).
+
+Notification eligibility comes from files still present in the local library. The incremental scan may read other recent library entries to locate its time boundary, but only downloaded assets can produce notifications. With no downloaded assets, the monitor sends no requests. Default interval: 60 minutes; settings allow 30, 60, 180, 360 or 1440 minutes. Offline tests cover shared pacing, cross-service suspension, restart persistence, manual recovery and downloaded-only notification scope.
+
 - `desktop/`: WinForms host, WebView2 session, sync, download, local storage and background services.
 - `index.html`, `styles.css`, `app.js`, `features.js`: desktop UI.
 - `parser.js`, `page-reader.js`, `account-reader.js`: BOOTH page parsing and reads.

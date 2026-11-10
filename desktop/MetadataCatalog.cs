@@ -13,14 +13,16 @@ internal sealed class MetadataCatalog : IDisposable
     private readonly Dictionary<string, JsonObject> records = new();
     private readonly Dictionary<string, Task<JsonObject>> requests = new();
     private readonly RequestGate requestsGate = new(12);
+    private readonly BoothRequestPolicy? access;
     private readonly object gate = new();
 
-    internal MetadataCatalog(string root, HttpMessageHandler? handler = null)
+    internal MetadataCatalog(string root, HttpMessageHandler? handler = null, BoothRequestPolicy? access = null)
     {
+        this.access = access;
         cachePath = Path.Combine(root, "product-metadata.jsonl");
         client = handler == null ? new HttpClient() : new HttpClient(handler);
         client.Timeout = TimeSpan.FromSeconds(30);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("BOOTH-Shelf/0.5.0");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("BOOTH-Shelf/" + Program.AppVersion.ToString(3));
         if (File.Exists(cachePath))
             foreach (var line in File.ReadLines(cachePath))
                 try
@@ -109,7 +111,8 @@ internal sealed class MetadataCatalog : IDisposable
         for (var attempt = 0; attempt < 4; attempt++)
         {
             HttpResponseMessage response;
-            try { response = await requestsGate.RunAsync(() => client.GetAsync($"https://booth.pm/ja/items/{id}.json", token), token); }
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"https://booth.pm/ja/items/{id}.json");
+            try { response = await requestsGate.RunAsync(() => access == null ? client.SendAsync(request, token) : access.SendAsync(client, request, token), token); }
             catch (Exception error) when (attempt < 3 && !token.IsCancellationRequested && error is HttpRequestException or TaskCanceledException)
             { requestsGate.Backoff(2000 * (attempt + 1)); continue; }
             using (response)

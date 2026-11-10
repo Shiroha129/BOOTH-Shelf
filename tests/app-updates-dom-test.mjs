@@ -118,7 +118,7 @@ function hold(action) {
 check("scriptFollowsNotifications", window.document.querySelector('script[src="notifications.js"]').nextElementSibling?.getAttribute("src") === "app-updates.js");
 check("bannerFollowsHeader", window.document.querySelector(".heading").nextElementSibling === element("app-update-banner"));
 check("idleDoesNotCheckOrDownload", harness.messages.length === 0 && element("app-update-banner").hidden && element("app-update-start").hidden);
-check("initialCurrentVersion", element("app-update-current-version").textContent.includes("0.5.13"));
+check("initialCurrentVersion", element("app-update-current-version").textContent.includes(JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8")).version));
 element("app-update-check").click();
 element("app-update-check").click();
 check("checkLocksImmediately", count("app-update-check") === 1 && element("app-update-check").disabled && element("app-update-status").textContent === translate("正在检查软件更新…"));

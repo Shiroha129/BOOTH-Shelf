@@ -4,6 +4,7 @@ const desktopMode = Boolean(globalThis.chrome?.webview);
 const desktopRequests = new Map();
 let snapshot = { items: [] };
 let settings = {};
+let boothAccessState = {};
 let downloads = [];
 let displayPage = 1;
 let currentView = "library";
@@ -113,6 +114,7 @@ if (desktopMode) {
     if (message.type === "currency") { exchangeRates = message.rates || {}; renderCurrency(); render(); return; }
     if (message.type === "close-request") { showCloseChoice(); return; }
     if (message.type === "updates") { notificationState = message.state; renderNotifications(); return; }
+    if (message.type === "booth-access") { boothAccessState = message.state; renderBoothAccess(); return; }
     if (message.type === "updates-open") { showView("notifications"); return; }
     if (message.type === "app-update") { appUpdateState = message.state; renderAppUpdate(); return; }
     const request = desktopRequests.get(message.id);
@@ -461,6 +463,9 @@ function renderSettings() {
   element("currency-select").value = settings.currency || "CNY";
   element("close-behavior").value = settings.closeBehavior || "ask";
   element("update-notifications").checked = settings.updateNotifications !== false;
+  element("notification-interval").value = String(settings.notificationIntervalMinutes || 60);
+  element("notification-interval").disabled = settings.updateNotifications === false;
+  renderBoothAccess();
   renderCurrency();
   renderSessionBackup();
   if (typeof renderAppUpdate === "function") renderAppUpdate();
@@ -588,9 +593,10 @@ document.addEventListener("DOMContentLoaded", () => run(async () => {
   await I18n.ready;
   const stored = await desktopRequest("load");
   settings = stored.settings || {};
+  boothAccessState = stored.boothAccess || {};
   filterPresets = stored.filterPresets || [];
   notificationState = stored.notifications || { items: [] };
-  appUpdateState = stored.appUpdate || { status: "idle", currentVersion: "0.5.13" };
+  appUpdateState = stored.appUpdate || { status: "idle", currentVersion: "1.0.0" };
   systemLanguage = stored.systemLanguage || navigator.language;
   I18n.set(settings.language || "auto", systemLanguage);
   downloads = stored.downloads || [];

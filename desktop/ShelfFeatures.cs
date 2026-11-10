@@ -14,6 +14,7 @@ internal sealed partial class ShelfWindow
     private CurrencyService currency = null!;
     private FilterPresetStore filterPresets = null!;
     private PurchaseCatalog purchases = null!;
+    private BoothRequestPolicy boothAccess = null!;
     private SessionBrowser? authentication;
     private Task<object>? authTask;
 
@@ -30,18 +31,22 @@ internal sealed partial class ShelfWindow
         preferences["language"] ??= "auto";
         preferences["closeBehavior"] ??= "ask";
         preferences["updateNotifications"] ??= true;
+        preferences["notificationIntervalMinutes"] ??= 60;
+        boothAccess = new BoothRequestPolicy(Program.DataDirectory);
+        boothAccess.Changed += BoothAccessChanged;
         filterPresets = new FilterPresetStore(Program.DataDirectory);
-        metadata = new MetadataCatalog(Program.DataDirectory);
+        metadata = new MetadataCatalog(Program.DataDirectory, access: boothAccess);
         currency = new CurrencyService(Program.DataDirectory);
         purchases = new PurchaseCatalog(Program.DataDirectory);
         downloads = new DownloadService(Program.DataDirectory,
             () => Task.FromResult(environment ?? throw new InvalidOperationException("浏览器尚未准备好")),
-            () => preferences["downloadDirectory"]!.GetValue<string>(), lifetime.Token);
+            () => preferences["downloadDirectory"]!.GetValue<string>(), lifetime.Token, access: boothAccess);
         downloads.Changed += Reply;
         localLibrary = new LocalLibrary(Program.DataDirectory, downloads.History);
         downloads.Completed += record =>
         {
             localLibrary.Add(record);
+            RefreshNotificationLibrary();
             Reply(new { type = "local-files", items = localLibrary.List() });
         };
     }
@@ -49,6 +54,7 @@ internal sealed partial class ShelfWindow
     private void DisposeFeatures()
     {
         downloads.Changed -= Reply;
+        boothAccess.Changed -= BoothAccessChanged;
         metadata.Dispose();
         currency.Dispose();
         downloads.Dispose();
@@ -78,8 +84,15 @@ internal sealed partial class ShelfWindow
             updated["closeBehavior"] = value;
         }
         if (payload?["updateNotifications"] is JsonValue notifications) updated["updateNotifications"] = notifications.GetValue<bool>();
+        if (payload?["notificationIntervalMinutes"] is JsonValue interval)
+        {
+            var minutes = interval.GetValue<int>();
+            if (!UpdateMonitor.Intervals.Contains(minutes)) throw new InvalidDataException("通知检查间隔无效");
+            updated["notificationIntervalMinutes"] = minutes;
+        }
         SyncCache.AtomicWrite(preferencesPath, updated.ToJsonString());
         preferences = updated;
+        updateMonitor.SetInterval(preferences["notificationIntervalMinutes"]!.GetValue<int>());
         if (!NotificationsEnabled) updateCancellation?.Cancel();
         NativeLanguage.Preference = preferences["language"]?.GetValue<string>() ?? "auto";
         booth?.RefreshLanguage();
@@ -130,6 +143,7 @@ internal sealed partial class ShelfWindow
     private JsonArray LocalAction(JsonNode? payload)
     {
         localLibrary.Act(payload?["id"]?.GetValue<string>() ?? "", payload?["action"]?.GetValue<string>() ?? "");
+        RefreshNotificationLibrary();
         return localLibrary.List();
     }
 
@@ -145,6 +159,7 @@ internal sealed partial class ShelfWindow
         LocalAssetFolders(payload);
         localLibrary.DeleteAsset(payload?["itemId"]?.GetValue<string>() ?? "",
             payload?["directories"]?.AsArray().Select(directory => directory!.GetValue<string>()).ToArray() ?? []);
+        RefreshNotificationLibrary();
         return localLibrary.List();
     }
 
@@ -176,7 +191,7 @@ internal sealed partial class ShelfWindow
             if (environment == null) return new { authenticated };
             if (authentication == null)
             {
-                var candidate = new SessionBrowser();
+                var candidate = new SessionBrowser(boothAccess);
                 try
                 {
                     await candidate.InitializeAsync(environment);

@@ -1,8 +1,9 @@
 const testFixture = {
   testing: true,
-  appUpdate: { status: "idle", currentVersion: "0.5.13" },
+  appUpdate: { status: "idle", currentVersion: "1.0.0" },
   systemLanguage: "zh-CN",
-  settings: { currency: "CNY", downloadDirectory: "C:\\TestDownloads", rememberSession: true, pinnedTags: [], language: "auto", closeBehavior: "ask", updateNotifications: true },
+  settings: { currency: "CNY", downloadDirectory: "C:\\TestDownloads", rememberSession: true, pinnedTags: [], language: "auto", closeBehavior: "ask", updateNotifications: true, notificationIntervalMinutes: 60 },
+  boothAccess: { paused: false },
   filterPresets: [],
   notifications: { items: [], total: 5, mode: "incremental", sourcesReady: 3, pages: 3, checked: 5, unavailable: 0, enabled: true, status: "active", lastCheckedAt: "2026-11-10T01:00:00Z" },
   session: { state: "waiting", message: "登录成功后自动加密保存" },
@@ -80,7 +81,9 @@ window.chrome.webview = {
         case "updates-list": case "updates-check":
           testFixture.notifications.enabled = testFixture.settings.updateNotifications;
           testFixture.notifications.status = testFixture.settings.updateNotifications ? "active" : "disabled";
+          testFixture.notifications.intervalMinutes = testFixture.settings.notificationIntervalMinutes;
           result = testFixture.notifications; break;
+        case "booth-access-resume": testFixture.boothAccess = { paused: false }; result = testFixture.boothAccess; break;
         case "tag-pin": {
           const tags = new Set(testFixture.settings.pinnedTags);
           if (payload.pinned) tags.add(payload.tag); else tags.delete(payload.tag);

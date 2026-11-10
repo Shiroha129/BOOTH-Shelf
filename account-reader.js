@@ -63,14 +63,20 @@
       (async () => {
         try {
           const response = await fetch(url.href, { credentials: "same-origin", cache: "no-cache", signal: controller.signal });
-          if (new URL(response.url).pathname !== url.pathname) throw new Error("会话已跳转，请重新登录。");
           if (!response.ok) {
             const header = response.headers.get("Retry-After");
             const wait = header && /^\d+$/.test(header) ? Number(header) * 1000 : Math.max(0, Date.parse(header) - Date.now()) || 0;
-            job.result = { error: "BOOTH 返回 HTTP " + response.status, retryable: response.status === 429 || response.status >= 500, retryAfterMs: Math.min(2147480000, wait) };
+            const body = await response.text();
+            const challenge = /<title[^>]*>\s*(?:just a moment|attention required|security verification|checking your browser)|(?:id=["'](?:challenge-form|cf-challenge-running)["'])|<script[^>]+\/cdn-cgi\/challenge-platform\//i.test(body);
+            job.result = { error: "BOOTH 返回 HTTP " + response.status, status: response.status, challenge, retryable: response.status === 429 || response.status >= 500, retryAfterMs: Math.min(2147480000, wait) };
             return;
           }
           const doc = new DOMParser().parseFromString(await response.text(), "text/html");
+          if (/just a moment|attention required|security verification|checking your browser/i.test(doc.title) || doc.querySelector('#challenge-form, #cf-challenge-running, script[src*="/cdn-cgi/challenge-platform/"]')) {
+            job.result = { error: "BOOTH 自动访问已暂停，请到设置中查看并手动继续。", status: response.status, challenge: true, retryable: false };
+            return;
+          }
+          if (new URL(response.url).pathname !== url.pathname) throw new Error("会话已跳转，请重新登录。");
           if (doc.querySelector('input[type="password"]') || /just a moment|attention required/i.test(doc.title)) throw new Error("BOOTH 要求登录或网页验证，请完成后继续。");
           const data = kind === "orders" ? orders(doc, response.url) : kind === "receipt" ? receipt(doc, response.url) : BoothParser.parse(doc, response.url);
           data.serverDate = response.headers.get("Date");

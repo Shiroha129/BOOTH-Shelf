@@ -13,7 +13,7 @@ A Windows home for your BOOTH assets. Sync, filter, download, and keep up with f
 - **Organize assets**: sync purchases, gifts and free items; browse by shop.
 - **Filter quickly**: favorite tags, combine all / any / exclude rules, and save presets.
 - **Download and manage files**: choose purchased or gifted files to save; open files, locate folders, or move them to the Recycle Bin.
-- **Get update alerts**: check for file changes roughly every 15 minutes without downloading each asset. Runs in the tray, too.
+- **Get update alerts**: alerts for downloaded assets, checked hourly by default with an adjustable interval. Runs in the tray, too.
 - **Update the app**: automatically check GitHub for new versions, then download, install and restart from the app.
 - **Track spending**: order totals and reference currency conversion. UI available in English, Japanese, Simplified Chinese, Traditional Chinese and Korean.
 
@@ -29,7 +29,7 @@ A Windows home for your BOOTH assets. Sync, filter, download, and keep up with f
 2. If WebView2 is already installed, the app opens directly. Otherwise, choose **Install and continue** to fetch Microsoft's official runtime. An internet connection is required.
 3. Sign in to BOOTH, run a full sync once, then use quick sync.
 
-Login information stays on your PC. This is an unsigned preview release. Free items are downloaded from their product pages.
+Login information stays on your PC. The Windows executable is not yet code-signed. Free items are downloaded from their product pages.
 
 [MIT License](../LICENSE) · [Third-party notices](../THIRD-PARTY-NOTICES.md) · [Changelog](../CHANGELOG.md)
 

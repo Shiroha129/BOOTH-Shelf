@@ -41,12 +41,21 @@ window.AccountReader.start("fixture", "https://accounts.booth.pm/library?sort=fi
 await new Promise(resolve => setTimeout(resolve, 5));
 const response = window.AccountReader.take("fixture");
 check("serverClockPreserved", response.data.serverDate === "Tue, 10 Nov 2026 01:00:00 GMT" && response.data.sort === "file_updated_at_desc" && requests === 1);
+for (const [name, status, body, challenge] of [["rateLimit", 429, "Slow down", false], ["forbidden", 403, "Forbidden", false], ["challenge", 200, "<title>Just a moment...</title>", true], ["challenge503", 503, "<form id='challenge-form'></form>", true]]) {
+  window.fetch = async url => ({ ok: status === 200, status, url, headers: { get: key => key === "Retry-After" ? "1200" : null }, text: async () => body });
+  window.AccountReader.start(name, "https://accounts.booth.pm/library", "library");
+  await new Promise(resolve => setTimeout(resolve, 5));
+  const blocked = window.AccountReader.take(name);
+  check(name + "ReportedToHost", blocked.status === status && blocked.challenge === challenge && Boolean(blocked.error));
+  if (status === 429) check("retryAfterPreserved", blocked.retryAfterMs === 1200000);
+}
 const catalog = JSON.parse(catalogText);
 window.element = id => window.document.getElementById(id);
 window.safeURL = value => value;
 window.run = action => action();
 window.showView = () => {};
 window.settings = {};
+window.boothAccessState = {};
 window.renderSettings = () => {};
 window.notify = () => {};
 window.desktopRequest = async () => ({});
@@ -61,7 +70,7 @@ for (const [index, language] of ["zh-CN", "zh-TW", "ja", "en", "ko"].entries()) 
   window.eval(notifications + `
     notificationState = { enabled: true, status: "active", sourcesReady: 3, pages: 3, checked: 18, total: 7067, unavailable: 0, lastCheckedAt: "2026-11-10T01:00:00Z", items: [{ id: "notice1", itemId: "1", title: "Asset", files: ["Materials.zip"], createdAt: "2026-11-10T01:00:00Z", read: false }] };
     renderNotifications();
-    checkFixture("idleFrequency_${language}", element("notification-status").textContent.includes("15") && !element("check-updates").disabled);
+    checkFixture("idleFrequency_${language}", element("notification-status").textContent.includes("60") && !element("check-updates").disabled);
     checkFixture("incrementalCoverage_${language}", element("notification-coverage").textContent.includes("3 / 3") && element("notification-coverage").textContent.includes("18") && !element("notification-coverage").textContent.includes("7067"));
     checkFixture("notifications_${language}", document.querySelector(".notification-card li").textContent === "Materials.zip" && element("notification-count").textContent === "1");
     notificationState.busy = true;
@@ -74,8 +83,32 @@ for (const [index, language] of ["zh-CN", "zh-TW", "ja", "en", "ko"].entries()) 
     notificationState.sources = [{ id: "bought", error: false, ownership: 0 }, { id: "free", error: true, ownership: 10 }];
     renderNotifications();
     checkFixture("sourceErrorDetails_${language}", element("notification-status").textContent.includes(t("免费")) && element("notification-status").textContent.includes("10"));
+    notificationState.status = "paused";
+    renderNotifications();
+    checkFixture("pausedCannotCheck_${language}", element("check-updates").disabled);
+    notificationState.status = "active";
+    notificationState.total = 0;
+    renderNotifications();
+    checkFixture("noDownloadsIdle_${language}", element("check-updates").disabled && element("notification-status").textContent === t("本地库暂无已下载资产，不会自动检查更新。"));
+    boothAccessState = { paused: true, reason: "rate-limit", retryAt: new Date(Date.now() + 1200000).toISOString() };
+    renderBoothAccess();
+    checkFixture("cooldownBlocksResume_${language}", element("booth-access-resume").disabled && !element("booth-access-banner").hidden);
+    boothAccessState.retryAt = new Date(Date.now() - 1000).toISOString();
+    renderBoothAccess();
+    checkFixture("cooldownNeedsManualResume_${language}", !element("booth-access-resume").disabled && !element("booth-access-banner").hidden);
+    boothAccessState = { paused: false };
+    renderBoothAccess();
+    checkFixture("resumeHidesWarning_${language}", element("booth-access-banner").hidden);
   `);
 }
+let savedInterval;
+window.desktopRequest = async (action, payload) => {
+  if (action === "settings-save") { savedInterval = payload.notificationIntervalMinutes; return { notificationIntervalMinutes: savedInterval }; }
+  return { status: "active", enabled: true, total: 1, intervalMinutes: savedInterval, items: [] };
+};
+window.element("notification-interval").value = "180";
+await window.element("notification-interval").onchange();
+check("intervalSavedThroughBridge", savedInterval === 180 && window.element("notification-status").textContent.includes("180"));
 dom.window.close();
 const result = { passed: true, checks: Object.keys(checks).length, results: checks, environment: "jsdom; no real browser layout or live account" };
 await fs.writeFile(path.join(root, "tests/notifications-dom-result.json"), JSON.stringify(result, null, 2));

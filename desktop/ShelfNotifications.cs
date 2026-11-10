@@ -14,8 +14,9 @@ internal sealed partial class ShelfWindow
 
     private void InitializeNotifications()
     {
-        updateMonitor = new UpdateMonitor(Program.DataDirectory);
-        updateMonitor.SetLibrary(ReadState()["snapshot"] as JsonObject);
+        updateMonitor = new UpdateMonitor(Program.DataDirectory, access: boothAccess);
+        updateMonitor.SetInterval(preferences["notificationIntervalMinutes"]!.GetValue<int>());
+        RefreshNotificationLibrary();
         updateMonitor.NewNotifications += count => { if (!closingSession && NotificationsEnabled) tray?.ShowUpdates(count); };
         updateMonitor.Progress += () => { if (!closingSession && !IsDisposed) Reply(new { type = "updates", state = NotificationState() }); };
         if (Program.SmokeTest) return;
@@ -28,14 +29,14 @@ internal sealed partial class ShelfWindow
     {
         var state = updateMonitor.State();
         state["enabled"] = NotificationsEnabled;
-        state["status"] = !NotificationsEnabled ? "disabled" : !sessionVerified ? "login" : syncing ? "syncing"
+        state["status"] = !NotificationsEnabled ? "disabled" : boothAccess.Paused ? "paused" : !sessionVerified ? "login" : syncing ? "syncing"
             : notificationError != null || state["issue"]?.GetValue<bool>() == true ? "error" : "active";
         return state;
     }
 
     private async Task CheckUpdatesAsync()
     {
-        if (Program.SmokeTest || !NotificationsEnabled || !sessionVerified || syncing || closingSession || IsDisposed || updateTask is { IsCompleted: false }) return;
+        if (Program.SmokeTest || !NotificationsEnabled || !sessionVerified || syncing || closingSession || IsDisposed || boothAccess.Paused || !updateMonitor.Due || updateTask is { IsCompleted: false }) return;
         updateTimer.Stop();
         updateTask = RunUpdateBatchAsync();
         try { await updateTask; }
@@ -44,6 +45,7 @@ internal sealed partial class ShelfWindow
 
     private async Task RunUpdateBatchAsync()
     {
+        RefreshNotificationLibrary();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         updateCancellation = cancellation;
         var publish = false;
@@ -53,7 +55,7 @@ internal sealed partial class ShelfWindow
             {
                 if (updateSession == null)
                 {
-                    var candidate = new AccountSession();
+                    var candidate = new AccountSession(boothAccess);
                     try { await candidate.InitializeAsync(environment!, token); updateSession = candidate; }
                     catch { candidate.Dispose(); throw; }
                 }
@@ -86,6 +88,8 @@ internal sealed partial class ShelfWindow
 
     private JsonObject RequestUpdateCheck()
     {
+        boothAccess.ThrowIfPaused();
+        RefreshNotificationLibrary();
         if (!sessionVerified) throw new InvalidOperationException("请先登录 BOOTH 后检查更新");
         if (!NotificationsEnabled) throw new InvalidOperationException("请先在设置中开启资产更新通知");
         updateMonitor.RequestCheck();
@@ -97,6 +101,29 @@ internal sealed partial class ShelfWindow
     {
         updateMonitor.MarkRead(id);
         return NotificationState();
+    }
+
+    private void RefreshNotificationLibrary(JsonObject? snapshot = null)
+    {
+        if (updateMonitor == null) return;
+        updateMonitor.SetDownloadedLibrary(snapshot ?? ReadState()["snapshot"] as JsonObject, localLibrary.List());
+        Reply(new { type = "updates", state = NotificationState() });
+    }
+
+    private void BoothAccessChanged()
+    {
+        if (IsDisposed || closingSession) return;
+        if (InvokeRequired) { BeginInvoke(BoothAccessChanged); return; }
+        Reply(new { type = "booth-access", state = boothAccess.State() });
+        if (updateMonitor != null) Reply(new { type = "updates", state = NotificationState() });
+    }
+
+    private JsonObject ResumeBoothAccess()
+    {
+        var state = boothAccess.Resume();
+        downloads.ResumePending();
+        _ = CheckAuthAsync();
+        return state;
     }
 
     private void DisposeNotifications()
