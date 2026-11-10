@@ -1,0 +1,424 @@
+document.addEventListener("DOMContentLoaded", async () => {
+  if (!new URLSearchParams(location.search).has("tests")) return;
+  const results = {};
+  const check = (name, condition) => { results[name] = Boolean(condition); if (!condition) throw new Error(name); };
+  const wait = async predicate => {
+    const end = Date.now() + 5000;
+    while (!predicate()) {
+      if (Date.now() > end) throw new Error("等待界面超时");
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+  };
+  const parse = html => new DOMParser().parseFromString(html, "text/html");
+  const receipt = (rows, total = "1,860", status = "Completed") => parse(`<main>Order Detail - Order Number123${status}Created At2026/11/09 20:00:32支付金额${total} JPY<section>${rows}</section></main>`);
+  const line = (id, price, boost = 0) => `<article><div><a class="nav" href="https://shop.booth.pm/items/${id}">Asset ${id}</a></div><div class="u-tpg-caption1">${price} JPY</div><div class="u-tpg-caption1"><span class="particulars-heading">BOOST</span>${boost} JPY</div></article>`;
+  try {
+    await wait(() => snapshot.items.length === 5);
+    check("brandIsNotInteractive", document.querySelector(".brand").tagName === "DIV" && !document.querySelector(".brand").hasAttribute("tabindex") && !document.querySelector(".brand a"));
+    const tagCases = [{ tags: ["A", "B"] }, { tags: ["A", "C"] }, { tags: ["B", "D"] }, { tags: ["A", "B", "D"] }, {}];
+    check("tagAndLogic", tagCases.filter(item => LibraryFilters.matches(item, { tags: ["A", "B"] })).length === 2);
+    check("tagOrLogic", tagCases.filter(item => LibraryFilters.matches(item, { anyTags: ["B", "C"] })).length === 4);
+    check("tagExcludeLogic", tagCases.filter(item => LibraryFilters.matches(item, { excludedTags: ["D"] })).length === 3);
+    check("tagMixedLogic", tagCases.filter(item => LibraryFilters.matches(item, { tags: ["A"], anyTags: ["B", "C"], excludedTags: ["D"] })).length === 2);
+    setAuth(null);
+    check("unknownSessionDoesNotRequestLogin", element("login").hidden && !element("auth-state").hidden
+      && !element("retry-auth").hidden && element("settings-auth").textContent === "暂时无法确认登录状态");
+    setAuth(false);
+    check("confirmedLoginRequired", !element("login").hidden && element("auth-state").hidden && element("retry-auth").hidden);
+    check("localOnlyLoginHint", !element("login-privacy").hidden && element("login-privacy").textContent === "登录信息仅保留在本地");
+    const accountPage = '<main><article><a href="https://shop.booth.pm/items/123">Owned asset</a></article></main>';
+    check("authenticatedLibrary", BoothParser.authentication(parse(accountPage), "https://accounts.booth.pm/library/") === true);
+    check("officialLoginPage", BoothParser.authentication(parse('<main>Sign in</main>'), "https://booth.pm/users/sign_in") === false);
+    check("pixivLoginPage", BoothParser.authentication(parse('<input type="password">'), "https://accounts.pixiv.net/login") === false);
+    check("challengeIsNotLogout", BoothParser.authentication(parse('<title>Just a moment...</title><form id="challenge-form"></form>'), "https://booth.pm/users/sign_in") === null);
+    check("redirectIsNotLogout", BoothParser.authentication(parse('<main>Continue</main>'), "https://accounts.pixiv.net/authorize") === null);
+    check("emptyAccountCanBeAuthenticated", BoothParser.authentication(parse('<main>No gifts</main><a href="/orders">Orders</a>'), "https://accounts.booth.pm/library/gifts") === true);
+    check("unknownLibraryIsNotAuthenticated", BoothParser.authentication(parse('<main>Loading</main>'), "https://accounts.booth.pm/library") === null);
+    setAuth(true);
+    check("loginState", element("login").hidden && !element("auth-state").hidden);
+    check("loginHintHiddenWhenSignedIn", element("login-privacy").hidden);
+    check("boughtOnly", document.querySelectorAll(".card").length === 3);
+    check("currencyAndActualPrice", document.querySelector(".card-price").textContent.includes("790 JPY") && element("total-spend").textContent === "113.77 CNY");
+    check("unknownPrice", [...document.querySelectorAll(".card-price")].some(node => node.textContent === "成交价待同步"));
+    check("removedFileUpdates", !document.getElementById("updates-view") && !document.getElementById("updates-panel")
+      && !document.getElementById("auto-updates") && !document.querySelector('#sort option[value="updated"]'));
+    element("sort").value = "default";
+    element("sort").dispatchEvent(new Event("change"));
+    check("acquiredOrder", document.querySelector(".item-id").textContent === "#1");
+    const savedSpend = snapshot.spend;
+    snapshot.spend = { totalJpy: 0, orders: 0, complete: false };
+    renderFinancials();
+    check("unknownTotalNotZero", element("total-spend").textContent === "待全局更新");
+    snapshot.spend = { totalJpy: 790, orders: 1, complete: false };
+    renderFinancials();
+    check("partialTotalMarked", element("spend-detail").textContent.includes("历史待全局更新"));
+    snapshot.spend = savedSpend;
+    renderFinancials();
+    element("section-gift").click();
+    check("giftSection", document.querySelectorAll(".card").length === 2 && document.querySelectorAll(".download-button").length === 2);
+    element("section-free").click();
+    check("freeNoDownload", document.querySelectorAll(".card").length === 1 && !document.querySelector(".download-button"));
+    element("section-bought").click();
+    check("tagsInitiallyCompact", document.querySelectorAll(".tag-chip").length === 0 && element("tag-buttons").hidden
+      && element("tag-empty").hidden && !element("more-tags").hidden && element("more-tags").getAttribute("aria-expanded") === "false");
+    element("more-tags").click();
+    check("expandAllTags", document.querySelectorAll(".tag-chip").length === 3 && element("more-tags").getAttribute("aria-expanded") === "true");
+    document.querySelector(".tag-button").click();
+    check("tagCounts", document.querySelector(".tag-count").textContent === "3" && selectedTags.size === 1);
+    const clothing = [...document.querySelectorAll(".tag-button")].find(node => node.textContent.includes("衣装"));
+    clothing.click();
+    check("multipleTags", document.querySelectorAll(".card").length === 1);
+    element("more-tags").click();
+    check("collapseKeepsActiveFiltersVisible", document.querySelectorAll(".tag-chip").length === 2
+      && selectedTags.size === 2 && document.querySelectorAll(".card").length === 1);
+    element("clear-filters").click();
+    check("clearRestoresCompactTags", element("tag-buttons").hidden && element("tag-empty").hidden);
+    element("more-tags").click();
+    const pinClothing = () => [...document.querySelectorAll(".tag-chip")].find(node => node.querySelector(".tag-button").textContent.includes("衣装")).querySelector(".tag-pin");
+    pinClothing().click();
+    await wait(() => settings.pinnedTags.includes("衣装") && pendingTagPins.size === 0);
+    check("favoriteTagFirst", document.querySelector(".tag-button").textContent.includes("衣装") && document.querySelector(".tag-pin").textContent === "★");
+    check("pinDoesNotFilter", selectedTags.size === 0 && document.querySelectorAll(".card").length === 3);
+    check("pinBeforeTag", document.querySelector(".tag-chip").firstElementChild.classList.contains("tag-pin"));
+    settings = (await desktopRequest("load")).settings;
+    renderTags();
+    check("favoriteTagPersists", document.querySelector(".tag-pin").getAttribute("aria-pressed") === "true");
+    element("more-tags").click();
+    check("compactShowsFavoritesOnly", document.querySelectorAll(".tag-chip").length === 1 && document.querySelector(".tag-button").textContent.includes("衣装"));
+    element("section-gift").click();
+    check("favoriteSharedAcrossSections", document.querySelector(".tag-button").textContent.includes("衣装"));
+    element("section-bought").click();
+    element("clear-filters").click();
+    check("clearFiltersKeepsFavorites", settings.pinnedTags.includes("衣装"));
+    element("tag-search").value = "Hair";
+    element("tag-search").dispatchEvent(new Event("input"));
+    check("compactSearchFindsUnpinnedTags", document.querySelectorAll(".tag-chip").length === 1
+      && document.querySelector(".tag-button").textContent.includes("Hair") && !expandedTags);
+    element("tag-search").value = "missing-tag";
+    element("tag-search").dispatchEvent(new Event("input"));
+    check("tagSearchEmptyState", element("tag-buttons").hidden && !element("tag-empty").hidden && element("tag-empty").textContent === "未找到标签");
+    element("tag-search").value = "衣装";
+    element("tag-search").dispatchEvent(new Event("input"));
+    check("favoriteTagSearch", document.querySelectorAll(".tag-chip").length === 1 && document.querySelector(".tag-pin").textContent === "★");
+    element("tag-search").value = "";
+    element("tag-search").dispatchEvent(new Event("input"));
+    pinClothing().click();
+    await wait(() => settings.pinnedTags.length === 0 && pendingTagPins.size === 0);
+    check("unpinLastFavoriteCollapsesSpace", element("tag-buttons").hidden && element("tag-empty").hidden && !element("more-tags").hidden);
+    element("more-tags").click();
+    check("unpinRestoresCountOrder", document.querySelector(".tag-button").textContent.includes("VRChat") && document.querySelector(".tag-count").textContent === "3");
+    const tagControl = (name, selector) => [...document.querySelectorAll(".tag-chip")].find(chip => chip.dataset.tag === name).querySelector(selector);
+    tagControl("VRChat", ".tag-button").click();
+    tagControl("衣装", ".tag-any").click();
+    tagControl("Hair", ".tag-any").click();
+    check("tagAnyButtons", selectedTags.has("VRChat") && anyTags.size === 2 && document.querySelectorAll(".card").length === 2);
+    tagControl("Hair", ".tag-exclude").click();
+    check("tagRulesMutuallyExclusive", !anyTags.has("Hair") && excludedTags.has("Hair") && document.querySelectorAll(".card").length === 1);
+    element("save-preset").click();
+    element("preset-name").value = "常用衣装";
+    element("preset-submit").click();
+    await wait(() => filterPresets.length === 1 && !element("preset-dialog").open);
+    check("presetSavesAllTagRules", filterPresets[0].filters.tags.join() === "VRChat" && filterPresets[0].filters.anyTags.join() === "衣装" && filterPresets[0].filters.excludedTags.join() === "Hair");
+    element("clear-filters").click();
+    check("clearAllTagRules", !selectedTags.size && !anyTags.size && !excludedTags.size);
+    document.querySelector(".preset-apply").click();
+    check("oneClickPreset", selectedTags.has("VRChat") && anyTags.has("衣装") && excludedTags.has("Hair") && document.querySelectorAll(".card").length === 1);
+    filterPresets = (await desktopRequest("load")).filterPresets;
+    check("presetReloadPersists", filterPresets.length === 1 && filterPresets[0].name === "常用衣装");
+    element("save-preset").click();
+    check("sameNameUpdatesPreset", element("preset-submit").textContent === "更新预设");
+    element("preset-submit").click();
+    await wait(() => !element("preset-dialog").open);
+    check("presetUpdateDoesNotDuplicate", filterPresets.length === 1);
+    element("more-tags").click();
+    check("allRuleTypesVisibleWhenCollapsed", document.querySelectorAll(".tag-chip").length === 3);
+    element("clear-filters").click();
+    element("more-tags").click();
+    const downloadWidth = document.querySelector(".download-button").getBoundingClientRect().width;
+    const bottomWidth = document.querySelector(".card-bottom").getBoundingClientRect().width;
+    check("wideDownloadButton", Math.abs(downloadWidth - bottomWidth) < 2);
+    element("browse-shops").click();
+    check("shopGroups", document.querySelectorAll(".shop-row").length === 3 && document.querySelector(".shop-identity small").textContent === "2 件资产");
+    const freePreview = [...document.querySelectorAll(".shop-previews a")].find(node => node.title === "免费 Glasses");
+    check("freeShopLink", freePreview?.href === "https://booth.pm/ja/items/4" && freePreview.onclick === null);
+    [...document.querySelectorAll(".shop-identity")].find(node => node.textContent.includes("Test Atelier")).click();
+    check("shopAssets", !element("shop-selection").hidden && document.querySelectorAll(".card").length === 2);
+    element("clear-filters").click();
+    check("clearShopAndTags", !selectedShop && tagCounts.find(([tag]) => tag === "VRChat")[1] === 3);
+    const savedLibraryForShops = structuredClone(snapshot);
+    setSnapshot({ items: Array.from({ length: 120 }, (_, index) => ({
+      id: String(index + 1000), title: "Scroll asset " + index, shop: "Scroll Shop " + String(Math.floor(index / 2)).padStart(2, "0"),
+      sections: ["bought"], tags: ["VRChat"], url: "https://booth.pm/ja/items/" + (index + 1000)
+    })), complete: true });
+    element("browse-shops").click();
+    element("more-shops").click();
+    element("shop-search").value = "Scroll Shop";
+    element("shop-search").dispatchEvent(new Event("input"));
+    element("more-shops").click();
+    window.scrollTo(0, 1200);
+    const shopListScroll = window.scrollY;
+    const shopListRows = document.querySelectorAll(".shop-row").length;
+    document.querySelectorAll(".shop-identity")[8].click();
+    check("shopEntryStartsAtTop", shopListScroll > 0 && window.scrollY === 0 && !element("shop-selection").hidden);
+    element("back-shops").click();
+    check("shopReturnRestoresPosition", Math.abs(window.scrollY - shopListScroll) < 2 && document.querySelectorAll(".shop-row").length === shopListRows
+      && element("shop-search").value === "Scroll Shop" && shopPage === 2);
+    document.querySelectorAll(".shop-identity")[8].click();
+    element("shops-view").click();
+    check("shopSidebarReturnKeepsLoadedRows", Math.abs(window.scrollY - shopListScroll) < 2 && shopPage === 2
+      && document.querySelectorAll(".shop-row").length === shopListRows);
+    element("shop-search").value = "";
+    element("shop-search").dispatchEvent(new Event("input"));
+    window.scrollTo(0, 0);
+    showView("library");
+    element("clear-filters").click();
+    setSnapshot(savedLibraryForShops);
+    const scrollBeforeDialog = document.scrollingElement.scrollTop;
+    const widthBeforeDialog = document.querySelector(".workspace").getBoundingClientRect().width;
+    await openFiles(snapshot.items[0]);
+    check("materialBadge", element("file-dialog").open && document.querySelector(".file-option .material-badge").textContent === "材质文件");
+    check("preferredFilesHaveNoBadge", document.querySelectorAll(".file-option")[1].textContent === "Outfit_Milfy.zip"
+      && document.querySelectorAll(".file-option")[2].textContent === "Outfit_エク.zip" && document.querySelectorAll(".material-badge").length === 1);
+    check("fileDialogLocksBackground", getComputedStyle(document.documentElement).overflowY === "hidden"
+      && document.querySelector(".workspace").getBoundingClientRect().width === widthBeforeDialog && getComputedStyle(element("file-list")).overscrollBehaviorY === "contain");
+    element("file-choose-directory").click();
+    await wait(() => element("file-directory").textContent === "D:\\ChangedFolder");
+    check("changeDirectoryInDialog", true);
+    const file = element("file-list").querySelector('input[value="102"]');
+    file.checked = true;
+    file.dispatchEvent(new Event("change"));
+    element("download-selected").click();
+    await wait(() => !element("file-dialog").open);
+    check("closingDialogRestoresScroll", getComputedStyle(document.documentElement).overflowY !== "hidden"
+      && document.scrollingElement.scrollTop === scrollBeforeDialog);
+    check("selectedFilesOnly", testMessages.findLast(message => message.action === "downloads-start").payload.ids.join() === "102");
+    element("local-view").click();
+    await wait(() => currentView === "local");
+    check("localOnly", document.querySelectorAll(".card").length === 1 && !document.querySelector(".download-button"));
+    document.querySelector(".cover").click();
+    check("localFileDialog", element("local-dialog").open && document.querySelectorAll(".local-file").length === 2);
+    check("localDialogLocksBackground", getComputedStyle(document.documentElement).overflowY === "hidden");
+    document.querySelector(".local-file").click();
+    await wait(() => testMessages.some(message => message.action === "local-action"));
+    check("openLocalById", testMessages.findLast(message => message.action === "local-action").payload.id === "local1");
+    document.querySelector(".local-file").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 500, clientY: 300 }));
+    check("fileContextMenu", !element("file-menu").hidden && element("local-folder").textContent === "打开所在目录");
+    element("local-folder").click();
+    check("folderById", testMessages.findLast(message => message.action === "local-action").payload.action === "folder");
+    element("close-local").click();
+    check("localDialogUnlocksBackground", getComputedStyle(document.documentElement).overflowY !== "hidden");
+    const windowCommands = () => testMessages.filter(message => message.action === "window" && message.payload.action !== "ready");
+    const beforeChoice = windowCommands().length;
+    element("window-close").click();
+    await wait(() => element("close-dialog").open);
+    check("closeShowsChoiceWithoutExiting", element("close-dialog").open && windowCommands().length === beforeChoice + 1
+      && getComputedStyle(document.documentElement).overflowY === "hidden");
+    element("close-cancel").click();
+    check("closeChoiceCancel", !element("close-dialog").open && windowCommands().length === beforeChoice + 1);
+    element("window-close").click();
+    await wait(() => element("close-dialog").open);
+    element("close-tray").click();
+    await wait(() => !element("close-dialog").open);
+    check("trayChoiceCommand", windowCommands().at(-1).payload.action === "tray");
+    element("window-close").click();
+    await wait(() => element("close-dialog").open);
+    element("close-exit").click();
+    await wait(() => !element("close-dialog").open);
+    check("exitChoiceCommand", windowCommands().at(-1).payload.action === "exit");
+    for (const listener of testListeners) listener({ data: { type: "close-request" } });
+    check("nativeCloseShowsChoice", element("close-dialog").open);
+    element("dismiss-close").click();
+    check("cancelButtonMatchesSiblings", element("close-cancel").classList.contains("secondary"));
+    for (const action of ["tray", "exit"]) {
+      element("window-close").click();
+      await wait(() => element("close-dialog").open);
+      element("close-remember").checked = true;
+      element("close-" + action).click();
+      await wait(() => !element("close-dialog").open);
+      check("rememberCloseChoice_" + action, settings.closeBehavior === action && testWindowActions.at(-1) === action);
+      element("window-close").click();
+      await wait(() => !desktopRequests.size);
+      check("rememberedCloseSkipsPrompt_" + action, !element("close-dialog").open && testWindowActions.at(-1) === action);
+      element("close-behavior").value = "ask";
+      element("close-behavior").dispatchEvent(new Event("change"));
+      await wait(() => settings.closeBehavior === "ask");
+    }
+    element("window-close").click();
+    await wait(() => element("close-dialog").open);
+    check("settingsRestoresPrompt", !element("close-remember").checked);
+    element("close-remember").checked = true;
+    element("close-cancel").click();
+    check("cancelDoesNotRemember", settings.closeBehavior === "ask");
+    for (const listener of testListeners) listener({ data: { type: "currency", rates: { date: "2026-11-10", source: "测试汇率", rates: { JPY: 1, CNY: .05 } } } });
+    check("backgroundRatesUpdateAmounts", element("total-spend").textContent.includes("135") && element("currency-state").textContent.includes("2026-11-10"));
+    for (const listener of testListeners) listener({ data: { type: "currency", rates: testFixture.rates } });
+    element("settings-view").click();
+    check("rememberSessionSetting", element("remember-session").checked && element("session-state").textContent.includes("加密保存"));
+    element("save-session").click();
+    await wait(() => sessionBackup.state === "saved");
+    check("sessionBackupStatus", element("session-state").textContent.includes("2026") && !element("save-session").disabled);
+    element("remember-session").checked = false;
+    element("remember-session").dispatchEvent(new Event("change"));
+    await wait(() => settings.rememberSession === false);
+    check("disableSessionBackup", element("save-session").disabled && sessionBackup.state === "disabled");
+    element("remember-session").checked = true;
+    element("remember-session").dispatchEvent(new Event("change"));
+    await wait(() => settings.rememberSession === true);
+    check("sessionBridgeNoCookies", testMessages.filter(message => message.action.startsWith("session-")).every(message => !message.payload || Object.keys(message.payload).join() === "enabled"));
+    element("refresh-currency").click();
+    await wait(() => !element("refresh-currency").disabled);
+    check("manualRateRefreshStillForcesNetwork", testMessages.findLast(message => message.action === "currency-refresh").payload.force === true);
+    element("currency-select").value = "JPY";
+    element("currency-select").dispatchEvent(new Event("change"));
+    await wait(() => settings.currency === "JPY");
+    check("currencySetting", element("total-spend").textContent === "2,700 JPY" && !document.getElementById("auto-metadata"));
+    const systemCases = { "zh-CN": "zh-CN", "zh-SG": "zh-CN", "zh-Hans": "zh-CN", "zh-Hans-HK": "zh-CN", "zh-TW": "zh-TW", "zh-HK": "zh-TW", "zh-MO": "zh-TW", "zh-Hant": "zh-TW", "zh-Hant-CN": "zh-TW", "ja-JP": "ja", "en-GB": "en", "ko-KR": "ko", "fr-FR": "en", "zh_HK": "zh-TW" };
+    check("systemLanguageMapping", Object.entries(systemCases).every(([system, expected]) => I18n.resolve(system) === expected));
+    check("defaultFollowsSystem", settings.language === "auto" && document.documentElement.lang === "zh-CN");
+    const selectLanguage = async language => {
+      element("language-select").value = language;
+      element("language-select").dispatchEvent(new Event("change"));
+      await wait(() => settings.language === language && !element("language-select").disabled);
+    };
+    const expectedLanguages = {
+      "zh-CN": ["设置", "↓ 下载", "材质文件", "已登录"],
+      "zh-TW": ["設定", "↓ 下載", "材質檔案", "已登入"],
+      ja: ["設定", "↓ ダウンロード", "マテリアルファイル", "ログイン済み"],
+      en: ["Settings", "↓ Download", "Material file", "Signed in"],
+      ko: ["설정", "↓ 다운로드", "머티리얼 파일", "로그인됨"]
+    };
+    showView("library");
+    [...document.querySelectorAll(".tag-button")].find(node => node.textContent.includes("衣装")).click();
+    pinClothing().click();
+    await wait(() => settings.pinnedTags.includes("衣装") && pendingTagPins.size === 0);
+    showView("settings");
+    systemLanguage = "ko-KR";
+    const originalAssets = JSON.stringify(snapshot.items);
+    for (const [language, expected] of Object.entries(expectedLanguages)) {
+      await selectLanguage(language);
+      check("translatedInterface_" + language, element("view-title").textContent === expected[0]
+        && element("settings-view").textContent.includes(expected[0])
+        && document.querySelector(".download-button").textContent === expected[1]
+        && element("settings-auth").textContent === expected[3]);
+      check("languageKeepsFilters_" + language, selectedTags.has("衣装") && settings.pinnedTags.includes("衣装")
+        && settings.currency === "JPY" && document.querySelectorAll(".card").length === 1
+        && document.querySelector(".item-link").textContent === "测试衣装"
+        && document.querySelector(".tag-button").textContent.includes("衣装"));
+      await openFiles(snapshot.items[0]);
+      check("translatedFileDialog_" + language, document.querySelector(".material-badge").textContent === expected[2]
+        && document.querySelector(".file-option > span").textContent === "Materials.zip");
+      element("close-files").click();
+      element("window-close").click();
+      await wait(() => element("close-dialog").open);
+      check("translatedCloseChoice_" + language, element("close-dialog").open
+        && element("close-tray").textContent === ({ "zh-CN": "缩小到托盘", "zh-TW": "縮小至系統匣", ja: "トレイに最小化", en: "Minimize to tray", ko: "트레이로 최소화" })[language]);
+      element("close-cancel").click();
+    }
+    await selectLanguage("en");
+    check("manualOverridesSystem", document.documentElement.lang === "en-US" && element("system-language").textContent.includes("한국어"));
+    settings = (await desktopRequest("load")).settings;
+    applyLanguage();
+    check("languagePreferencePersists", I18n.language === "en" && element("language-select").value === "en");
+    check("translatedParameterizedMessage", I18n.message("第 2 页：BOOTH 页面加载超时，请检查网络后重试。") === "Page 2: BOOTH page timed out. Check your connection and retry.");
+    renderSyncProgress({ page: 4, total: 9, count: 80, remainingSeconds: 120 });
+    check("translatedSyncProgress", !/[\u3400-\u9fff]/u.test(element("sync-detail").textContent) && element("sync-detail").textContent.includes("80"));
+    await selectLanguage("auto");
+    check("autoRestoresSystemLanguage", I18n.language === "ko" && element("view-title").textContent === "설정");
+    systemLanguage = "zh-HK";
+    applyLanguage();
+    check("traditionalSystemLanguage", I18n.language === "zh-TW" && element("view-title").textContent === "設定");
+    systemLanguage = "fr-FR";
+    applyLanguage();
+    check("unsupportedSystemUsesEnglish", I18n.language === "en" && element("view-title").textContent === "Settings");
+    check("assetDataUnchangedByLanguage", JSON.stringify(snapshot.items) === originalAssets);
+    systemLanguage = testFixture.systemLanguage;
+    applyLanguage();
+    pinClothing().click();
+    await wait(() => settings.pinnedTags.length === 0 && pendingTagPins.size === 0);
+    element("clear-filters").click();
+    showView("library");
+    element("section-gift").click();
+    element("sync-mode").value = "quick";
+    element("sync").click();
+    await wait(() => !syncing && testMessages.some(message => message.action === "sync"));
+    check("quickSyncNotLimitedToTab", JSON.stringify(testMessages.findLast(message => message.action === "sync").payload) === '{"mode":"quick"}');
+    element("section-free").click();
+    element("sync-mode").value = "full";
+    element("sync").click();
+    await wait(() => !syncing && testMessages.filter(message => message.action === "sync").length === 2);
+    check("fullSyncNotLimitedToTab", JSON.stringify(testMessages.findLast(message => message.action === "sync").payload) === '{"mode":"full"}');
+    element("section-bought").click();
+    const one = AccountReader.receipt(receipt(line("1", "790"), "790"), "https://accounts.booth.pm/orders/123");
+    check("receiptSingle", one.paid && one.total === 790 && one.lines[0].price === 790 && one.createdAt.endsWith("+09:00"));
+    const two = AccountReader.receipt(receipt(line("1", "1,280") + line("2", "580")), "https://accounts.booth.pm/orders/123");
+    check("receiptMultiple", two.total === 1860 && two.lines.length === 2 && two.lines[1].price === 580);
+    const variants = AccountReader.receipt(receipt(line("1", "790", "50") + line("1", "100"), "940"), "https://accounts.booth.pm/orders/123");
+    check("receiptVariantsAndBoost", variants.lines.length === 2 && variants.lines[0].boost === 50);
+    check("receiptCanceled", !AccountReader.receipt(receipt(line("1", "790"), "790", "Canceled"), "https://accounts.booth.pm/orders/123").paid);
+    let rejected = false;
+    try { AccountReader.receipt(receipt(line("1", "790"), "unknown"), "https://accounts.booth.pm/orders/123"); } catch { rejected = true; }
+    check("receiptUnknownRejected", rejected);
+    const orders = AccountReader.orders(parse('<main><a href="/orders/11">Order</a><a href="?page=9">9</a></main>'), "https://accounts.booth.pm/orders?page=1");
+    check("orderPagination", orders.ids.join() === "11" && orders.maxPage === 9);
+    check("materialNames", ["Materials.zip", "Material.unitypackage", "asset_Mat_v2.zip", "マテリアル.zip", "shader.zip", "lilToon.zip"].every(BoothParser.isMaterial) && !BoothParser.isMaterial("Animation.zip"));
+    const library = parse('<main><article><a href="https://shop.booth.pm/items/1">Test asset</a><div><span>Materials.zip</span><div class="js-download-button" data-href="https://booth.pm/downloadables/101"><button>DL</button></div></div></article></main><a href="?category=example&page=2">2</a><a href="?page=99">99</a>');
+    const gift = BoothParser.parse(library, "https://accounts.booth.pm/library/gifts?category=example");
+    check("giftParserAndPagination", gift.items[0].section === "gift" && gift.items[0].files[0].material && gift.maxPage === 2);
+    const ownershipHtml = `<main><article><a href="https://shop.booth.pm/items/101">Owned</a><div><span>Materials.zip</span><div data-href="https://booth.pm/downloadables/301"><button>Download</button></div><div data-dropdown-items='[{"deeplinkDownloadableUrl":"https://booth.pm/downloadables/301/deeplink?client=booth-library-manager\\u0026variation_id=201"}]'></div></div><a href="https://shop.booth.pm/items/101">Owned duplicate</a></article><article><a href="https://shop.booth.pm/items/2">Other</a><div data-dropdown-items='[{"deeplinkDownloadableUrl":"https://booth.pm/downloadables/301/deeplink?variation_id=999"}]'></div></article></main>`;
+    for (const source of ["library", "library/gifts", "library/free_downloads"]) {
+      const parsed = BoothParser.parse(parse(ownershipHtml), "https://accounts.booth.pm/" + source).items[0];
+      check("ownedVariantParser_" + source, parsed.ownedVariationIds.join() === "201" && parsed.files[0].variationIds.join() === "201");
+    }
+    const free = BoothParser.parse(library, "https://accounts.booth.pm/library/free_downloads");
+    check("freeParser", free.items[0].section === "free");
+    check("explicitEmptyLibrary", BoothParser.parse(parse('<main>No gifts</main>'), "https://accounts.booth.pm/library/gifts").empty);
+    const sortedHtml = '<div id="js-library-search-data" data-search-params=\'{"sort":"file_updated_at_desc","page":2,"adult":"include"}\'></div><main>No gifts</main>';
+    const sorted = BoothParser.parse(parse(sortedHtml), "https://accounts.booth.pm/library/gifts?sort=file_updated_at_desc&page=2");
+    check("serverConfirmedUpdateSort", sorted.sort === "file_updated_at_desc" && sorted.searchPage === 2 && sorted.unfiltered);
+    const unconfirmed = BoothParser.parse(parse('<main>No gifts</main>'), "https://accounts.booth.pm/library/gifts?sort=file_updated_at_desc");
+    check("queryAloneDoesNotConfirmSort", !unconfirmed.sort && !unconfirmed.unfiltered);
+    const filtered = BoothParser.parse(parse(sortedHtml.replace('"adult":"include"', '"adult":"only"')), "https://accounts.booth.pm/library/gifts?sort=file_updated_at_desc");
+    check("filteredUpdateListRejected", !filtered.unfiltered);
+    const large = Array.from({ length: 24000 }, (_, index) => ({ id: String(index + 100), title: "Asset " + (index + 100), shop: "Scale Shop", tags: ["VRChat"] }));
+    showView("library");
+    element("sort").value = "default";
+    setSnapshot({ items: large, complete: true });
+    check("boundedLargeLibrary", document.querySelectorAll(".card").length === 80 && element("total").textContent === "24000");
+    element("search").value = "Asset 24099";
+    element("search").dispatchEvent(new Event("input"));
+    check("largeLibrarySearch", document.querySelectorAll(".card").length === 1 && document.querySelector(".item-id").textContent === "#24099");
+    element("clear-filters").click();
+    setSnapshot(structuredClone(testFixture.snapshot));
+    settings.currency = "CNY";
+    render();
+    showView("shops");
+    element("sync-progress").hidden = false;
+    notify("模拟数据 · 界面回归测试", false, true);
+    await new Promise(resolve => setTimeout(resolve, 10200));
+    check("completionTimer", element("sync-status").hidden && element("sync-progress").hidden);
+    testFixture.notifications.items = [{ id: "notice1", itemId: "1", title: "测试衣装", files: ["Materials.zip", "New.zip"], createdAt: "2026-11-10T12:00:00Z", read: false }];
+    element("notifications-view").click();
+    await wait(() => document.querySelector(".notification-card"));
+    check("notificationsHaveEntryAndUnreadCount", currentView === "notifications" && element("notification-count").textContent === "1" && !element("notification-count").hidden);
+    check("incrementalCheckStatus", element("notification-status").textContent.includes("15") && element("notification-coverage").textContent.includes("3 / 3") && element("notification-coverage").textContent.includes("上次完成"));
+    check("notificationsListChangedFiles", document.querySelectorAll(".notification-card li").length === 2);
+    document.querySelector(".notification-card button").click();
+    await wait(() => element("notification-count").hidden);
+    check("notificationMarkRead", testFixture.notifications.items[0].read);
+    element("unread-notifications").checked = true;
+    element("unread-notifications").dispatchEvent(new Event("change"));
+    check("unreadNotificationFilter", !document.querySelector(".notification-card"));
+    element("unread-notifications").checked = false;
+    element("unread-notifications").dispatchEvent(new Event("change"));
+    element("check-updates").click();
+    await wait(() => testMessages.some(message => message.action === "updates-check"));
+    check("notificationsDoNotStartDownloads", testMessages.filter(message => message.action.startsWith("updates-")).every(message => !message.payload || !message.payload.url));
+    results.passed = true;
+  } catch (error) { results.passed = false; results.error = error.stack; }
+  const report = document.createElement("output");
+  report.id = "test-result";
+  report.style = "display:block;padding:12px;margin-bottom:18px;background:#fff3dd;border-radius:8px;font-size:13px;";
+  report.textContent = (results.passed ? "验证通过" : "验证失败") + " · " + Object.keys(results).filter(key => results[key] === true && key !== "passed").length + " 项 · 当前为模拟数据" + (results.error ? " · " + results.error : "");
+  document.querySelector(".workspace").prepend(report);
+  await fetch("/test-result", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(results) });
+});

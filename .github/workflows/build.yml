@@ -1,0 +1,43 @@
+name: Windows build and tests
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - name: Build Windows executable
+        shell: pwsh
+        run: ./desktop/build.ps1 -OutputDirectory dist/publish
+      - name: Run offline core tests
+        shell: pwsh
+        run: ./desktop/test.ps1 -Executable dist/publish/BOOTH-Shelf.exe
+      - name: Package executable and license notices
+        shell: pwsh
+        run: ./desktop/package.ps1 -PublishDirectory dist/publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BOOTH-Shelf-windows-x64
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error

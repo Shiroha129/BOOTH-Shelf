@@ -1,0 +1,44 @@
+# Build and verification
+
+## Requirements
+
+- Windows 10/11 x64 and .NET 8 SDK.
+- Node.js 24 LTS for DOM tests.
+- Microsoft Edge WebView2 Runtime for the desktop UI.
+
+The EXE bundles .NET 8.0.33 and uses Microsoft.Web.WebView2 1.0.4314.35. The SDK restores NuGet packages into `.packages/`; neither that cache nor runtime user data belongs in Git.
+
+## Build
+
+```powershell
+npm ci
+npm test
+powershell -NoProfile -ExecutionPolicy Bypass -File desktop/build.ps1 -OutputDirectory dist/publish
+powershell -NoProfile -ExecutionPolicy Bypass -File desktop/test.ps1 -Executable dist/publish/BOOTH-Shelf.exe
+powershell -NoProfile -ExecutionPolicy Bypass -File desktop/package.ps1 -PublishDirectory dist/publish
+```
+
+The last step creates `dist/BOOTH-Shelf-v0.5.10-win-x64.zip` and `dist/SHA256SUMS.txt`. The ZIP contains the EXE, usage instructions, the project license and required runtime notices. Packaging refuses to reuse an existing staging directory to avoid carrying stale files into a release. Choose a fresh output directory with `-OutputDirectory` when packaging again.
+
+## Tests and preview
+
+`npm test` runs offline jsdom tests for library parsing, notifications, local-asset menus, deletion confirmation, and translations. The C# core test covers synchronization, caching, ownership, purchases, currencies, notifications, download selection, and local-folder deletion boundaries using synthetic fixtures in an isolated directory. It does not log in to BOOTH or delete personal assets. Native Recycle Bin interaction and actual WebView2 layout require manual verification.
+
+```powershell
+npm run preview
+```
+
+Open `http://127.0.0.1:5185/?tests=1` for the synthetic browser regression fixture, or `http://127.0.0.1:5185/?scroll=1` for scrolling checks. The server binds only to localhost and serves an explicit file allowlist. Preview downloads are mocked and do not contact a real account.
+
+For manual desktop checks, launch the EXE with an isolated directory, for example `--data-dir test-data-manual`. Keep all authentication, cache, export and download files out of commits. The deprecated account-inspection tools and real-account research samples are not included in this repository.
+
+## Structure
+
+- `desktop/`: WinForms host, WebView2 session, sync, download, local storage and background services.
+- `index.html`, `styles.css`, `app.js`, `features.js`: desktop UI.
+- `parser.js`, `page-reader.js`, `account-reader.js`: BOOTH page parsing and reads.
+- `library-filters.js`, `filter-presets.js`, `notifications.js`: filtering, saved presets and notifications.
+- `i18n.js`, `locales.json`: five UI languages and native messages.
+- `tests/`: synthetic fixtures and DOM/browser checks.
+
+The GitHub Actions workflow builds and tests on Windows and attaches the packaged ZIP as a workflow artifact. Public releases are published explicitly by the maintainer after reviewing the checks. For a version update, keep the project version, sidebar version, native window title, HTTP user agent and package version consistent.

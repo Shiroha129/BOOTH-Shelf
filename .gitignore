@@ -1,0 +1,15 @@
+.dotnet/
+.packages/
+.package-feed/
+node_modules/
+desktop/bin/
+desktop/obj/
+dist/
+*-data*/
+tests/*-result.json
+*.user
+*.suo
+.env
+.env.*
+*.pfx
+*.p12

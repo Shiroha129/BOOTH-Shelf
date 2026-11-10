@@ -1,0 +1,17 @@
+{
+  "name": "booth-shelf",
+  "version": "0.5.10",
+  "private": true,
+  "description": "Windows desktop library for BOOTH assets",
+  "license": "MIT",
+  "scripts": {
+    "test": "node tests/notifications-dom-test.mjs && node tests/local-library-dom-test.mjs",
+    "preview": "node tests/serve.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "29.1.1"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}
