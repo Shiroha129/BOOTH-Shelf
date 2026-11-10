@@ -14,6 +14,7 @@ internal static class BoothRequestPolicySelfTest
 
     private sealed class Handler : HttpMessageHandler
     {
+        private readonly object observed = new();
         internal int Calls;
         internal int Active;
         internal int Peak;
@@ -21,8 +22,9 @@ internal static class BoothRequestPolicySelfTest
         internal string? Html;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
-            Calls++;
-            Peak = Math.Max(Peak, Interlocked.Increment(ref Active));
+            Interlocked.Increment(ref Calls);
+            var active = Interlocked.Increment(ref Active);
+            lock (observed) Peak = Math.Max(Peak, active);
             try
             {
                 await Task.Delay(20, token);
