@@ -10,7 +10,7 @@ if (Test-Path -LiteralPath $bundle) { throw 'Package directory already exists; s
 New-Item -ItemType Directory -Path $bundle -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $root "$PublishDirectory/BOOTH-Shelf.exe") -Destination $bundle
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE'), (Join-Path $root 'THIRD-PARTY-NOTICES.md') -Destination $bundle
-Copy-Item -LiteralPath (Join-Path $root 'docs/USAGE.zh-CN.md') -Destination (Join-Path $bundle '使用说明.md')
+Copy-Item -LiteralPath (Join-Path $root 'docs/USAGE.zh-CN.md') -Destination (Join-Path $bundle 'USAGE.zh-CN.md')
 Copy-Item -LiteralPath (Join-Path $root 'licenses') -Destination $bundle -Recurse
 $archive = Join-Path $output ($name + '.zip')
 Compress-Archive -LiteralPath $bundle -DestinationPath $archive
