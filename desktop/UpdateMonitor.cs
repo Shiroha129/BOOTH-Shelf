@@ -17,7 +17,7 @@ internal sealed partial class UpdateMonitor : IDisposable
     private readonly BoothRequestPolicy? access;
     private int intervalMinutes = 60;
     private bool downloadedOnly;
-    internal static readonly int[] Intervals = [30, 60, 180, 360, 1440];
+    internal static readonly int[] Intervals = [0, 30, 60, 180, 360, 1440];
     private readonly Dictionary<string, JsonObject> records = new();
     private Dictionary<string, JsonObject> targets = new();
     private readonly JsonObject schedule;
@@ -27,7 +27,9 @@ internal sealed partial class UpdateMonitor : IDisposable
     private int notificationRevision;
     private int journalEntries;
     internal bool Busy { get; private set; }
-    internal bool Due => !Busy && targets.Count > 0 && RetryAfter <= now()
+    internal bool SystemNotificationsEnabled { get; set; } = true;
+    internal bool Enabled => intervalMinutes > 0;
+    internal bool Due => Enabled && !Busy && targets.Count > 0 && RetryAfter <= now()
         && LibraryCoordinator.Sections.Any(section => Date(sections[section.Id]?["nextAt"]) <= now());
     internal event Action<int>? NewNotifications;
     internal event Action? Progress;
@@ -123,6 +125,7 @@ internal sealed partial class UpdateMonitor : IDisposable
         {
             ["items"] = new JsonArray(notices.OfType<JsonObject>().Where(notice => !downloadedOnly || targets.ContainsKey(notice["itemId"]!.ToString())).Select(notice => (JsonNode)notice.DeepClone()).ToArray()),
             ["total"] = targets.Count, ["busy"] = Busy, ["mode"] = "incremental", ["intervalMinutes"] = intervalMinutes, ["downloadedOnly"] = downloadedOnly,
+            ["enabled"] = SystemNotificationsEnabled, ["detectionEnabled"] = Enabled,
             ["sourcesReady"] = states.Count(state => Date(state?["through"]) != DateTimeOffset.MinValue),
             ["checked"] = states.Sum(state => state?["checked"]?.GetValue<int>() ?? 0),
             ["pages"] = states.Sum(state => state?["pages"]?.GetValue<int>() ?? 0),
@@ -150,7 +153,7 @@ internal sealed partial class UpdateMonitor : IDisposable
 
     internal void RequestCheck()
     {
-        if (Busy || Date(schedule["manualAfter"]) > now() || RetryAfter > now()) return;
+        if (!Enabled || Busy || Date(schedule["manualAfter"]) > now() || RetryAfter > now()) return;
         foreach (var state in sections.Select(entry => entry.Value).OfType<JsonObject>()) state["nextAt"] = null;
         SaveSchedule();
     }

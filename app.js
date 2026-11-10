@@ -463,8 +463,8 @@ function renderSettings() {
   element("currency-select").value = settings.currency || "CNY";
   element("close-behavior").value = settings.closeBehavior || "ask";
   element("update-notifications").checked = settings.updateNotifications !== false;
-  element("notification-interval").value = String(settings.notificationIntervalMinutes || 60);
-  element("notification-interval").disabled = settings.updateNotifications === false;
+  element("notification-interval").value = String(settings.notificationIntervalMinutes ?? 60);
+  element("notification-interval").disabled = false;
   renderBoothAccess();
   renderCurrency();
   renderSessionBackup();
@@ -596,7 +596,7 @@ document.addEventListener("DOMContentLoaded", () => run(async () => {
   boothAccessState = stored.boothAccess || {};
   filterPresets = stored.filterPresets || [];
   notificationState = stored.notifications || { items: [] };
-  appUpdateState = stored.appUpdate || { status: "idle", currentVersion: "1.0.0" };
+  appUpdateState = stored.appUpdate || { status: "idle", currentVersion: "1.0.1" };
   systemLanguage = stored.systemLanguage || navigator.language;
   I18n.set(settings.language || "auto", systemLanguage);
   downloads = stored.downloads || [];

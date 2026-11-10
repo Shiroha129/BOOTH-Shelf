@@ -7,7 +7,7 @@ internal sealed partial class UpdateMonitor
 {
     internal async Task<bool> CheckBatchAsync(Func<string, CancellationToken, Task<JsonObject>> readLibrary, CancellationToken token)
     {
-        if (Busy || targets.Count == 0 || RetryAfter > now() || access?.Paused == true) return false;
+        if (!Enabled || Busy || targets.Count == 0 || RetryAfter > now() || access?.Paused == true) return false;
         var due = LibraryCoordinator.Sections.Where(section => Date(sections[section.Id]?["nextAt"]) <= now()).ToArray();
         if (due.Length == 0) return false;
         Busy = true;
@@ -53,7 +53,7 @@ internal sealed partial class UpdateMonitor
             Busy = false;
             schedule["manualAfter"] = now().AddSeconds(30).ToString("O");
             SaveSchedule();
-            if (notificationRevision > before) NewNotifications?.Invoke(notificationRevision - before);
+            if (Enabled && SystemNotificationsEnabled && notificationRevision > before) NewNotifications?.Invoke(notificationRevision - before);
         }
         return true;
     }

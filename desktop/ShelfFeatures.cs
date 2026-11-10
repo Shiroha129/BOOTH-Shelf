@@ -93,7 +93,8 @@ internal sealed partial class ShelfWindow
         SyncCache.AtomicWrite(preferencesPath, updated.ToJsonString());
         preferences = updated;
         updateMonitor.SetInterval(preferences["notificationIntervalMinutes"]!.GetValue<int>());
-        if (!NotificationsEnabled) updateCancellation?.Cancel();
+        updateMonitor.SystemNotificationsEnabled = preferences["updateNotifications"]!.GetValue<bool>();
+        if (!updateMonitor.Enabled) updateCancellation?.Cancel();
         NativeLanguage.Preference = preferences["language"]?.GetValue<string>() ?? "auto";
         booth?.RefreshLanguage();
         tray?.RefreshLanguage();

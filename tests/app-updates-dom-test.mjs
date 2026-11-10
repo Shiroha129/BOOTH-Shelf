@@ -38,7 +38,7 @@ for (const source of strings) {
     assert.deepEqual(placeholders(translation), placeholders(source), "Translation placeholders: " + source);
   }
 }
-check("allUpdateStringsHaveFiveLanguages", strings.size >= 36);
+check("allUpdateStringsHaveFiveLanguages", strings.has("软件更新") && strings.has("下载并重启"));
 
 async function createHarness({ dismissed = "", storageBlocked = false } = {}) {
   const dom = new JSDOM(html, { url: "https://shelf.test/", runScripts: "outside-only" });
@@ -228,7 +228,7 @@ for (const [index, language] of ["zh-CN", "zh-TW", "ja", "en", "ko"].entries()) 
   window.I18n.set(language, language);
   state({ status: "available", version: "0.5.17", lastCheckedAt: "2026-11-10T01:00:00Z" });
   check("staticLanguage_" + language, element("app-update-title").textContent === translate("软件更新") && element("app-update-release").textContent === translate("查看发行说明 ↗") && element("app-update-dismiss").getAttribute("aria-label") === translate("忽略此版本的更新提醒"));
-  check("dynamicLanguage_" + language, element("app-update-status").textContent === translate("发现新版本 {version}", { version: "0.5.17" }) && element("app-update-start").textContent === translate("下载并重启") && element("app-update-note").textContent === translate("点击“下载并重启”后下载更新，完成后自动重启安装。"));
+  check("dynamicLanguage_" + language, element("app-update-status").textContent === translate("发现新版本 {version}", { version: "0.5.17" }) && element("app-update-start").textContent === translate("下载并重启") && !element("app-update-note") && !element("app-update-banner-note"));
   check("localizedLastChecked_" + language, element("app-update-last-checked").textContent === translate("上次检查：{time}", { time: new Date("2026-11-10T01:00:00Z").toLocaleString(window.I18n.locale) }));
   state({ status: "downloading", received: 1024, total: 2048 });
   check("progressLanguage_" + language, element("app-update-meter").getAttribute("aria-label") === translate("软件更新下载进度") && element("app-update-detail").textContent === translate("已下载 {received} / {total}（{percent}）", { received: "1 KiB", total: "2 KiB", percent: new Intl.NumberFormat(window.I18n.locale, { style: "percent" }).format(0.5) }));
@@ -236,7 +236,7 @@ for (const [index, language] of ["zh-CN", "zh-TW", "ja", "en", "ko"].entries()) 
     state({ status: "ready", error });
     assert.equal(element("app-update-error").textContent, index ? catalog[error][index - 1] : error);
   }
-  check("backendErrorsAndReadyLanguage_" + language, element("app-update-start").textContent === translate("重启并安装更新") && element("app-update-note").textContent === translate("更新已下载，点击后重启并安装。"));
+  check("backendErrorsAndReadyLanguage_" + language, element("app-update-start").textContent === translate("重启并安装更新"));
 }
 window.I18n.set("en", "en");
 const unsafe = '<img src=x onerror="window.injected=true">';
@@ -290,6 +290,11 @@ for (const language of ["zh-CN", "zh-TW", "ja", "en", "ko"]) {
   integratedElement("language-select").dispatchEvent(new integrated.window.Event("change"));
   await integrationSettled();
   check("parentLanguageChangeRerenders_" + language, integratedElement("app-update-status").textContent === integrated.window.I18n.t("发现新版本 {version}", { version: "0.5.18" }) && integratedElement("app-update-start").textContent === integrated.window.I18n.t("下载并重启"));
+  check("conciseSettingsLanguage_" + language,
+    integratedElement("update-notifications").closest(".setting-row").querySelector("h2").textContent === integrated.window.I18n.t("已下载内容更新检测")
+    && integratedElement("update-notifications").closest("label").textContent === integrated.window.I18n.t("开启已下载资产的更新通知提醒")
+    && integratedElement("remember-session").closest("label").textContent === integrated.window.I18n.t("记住登录状态")
+    && integratedElement("notification-interval").options[0].textContent === integrated.window.I18n.t("从不"));
 }
 integrated.window.integrationHarness.emit({ ...candidate, status: "ready", error: backendErrors[2] });
 check("parentPushRendersPreparedRetry", integratedElement("app-update-start").textContent === integrated.window.I18n.t("重启并安装更新") && integratedElement("app-update-error").textContent === integrated.window.I18n.t(backendErrors[2]));

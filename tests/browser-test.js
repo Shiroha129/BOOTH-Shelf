@@ -13,7 +13,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const receipt = (rows, total = "1,860", status = "Completed") => parse(`<main>Order Detail - Order Number123${status}Created At2026/11/09 20:00:32支付金额${total} JPY<section>${rows}</section></main>`);
   const line = (id, price, boost = 0) => `<article><div><a class="nav" href="https://shop.booth.pm/items/${id}">Asset ${id}</a></div><div class="u-tpg-caption1">${price} JPY</div><div class="u-tpg-caption1"><span class="particulars-heading">BOOST</span>${boost} JPY</div></article>`;
   try {
-    await wait(() => snapshot.items.length === 5);
+    await wait(() => snapshot.items.length === 5 && authenticationState === false);
     check("brandIsNotInteractive", document.querySelector(".brand").tagName === "DIV" && !document.querySelector(".brand").hasAttribute("tabindex") && !document.querySelector(".brand a"));
     const tagCases = [{ tags: ["A", "B"] }, { tags: ["A", "C"] }, { tags: ["B", "D"] }, { tags: ["A", "B", "D"] }, {}];
     check("tagAndLogic", tagCases.filter(item => LibraryFilters.matches(item, { tags: ["A", "B"] })).length === 2);
@@ -400,7 +400,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     element("notifications-view").click();
     await wait(() => document.querySelector(".notification-card"));
     check("notificationsHaveEntryAndUnreadCount", currentView === "notifications" && element("notification-count").textContent === "1" && !element("notification-count").hidden);
-    check("incrementalCheckStatus", element("notification-status").textContent.includes("60") && element("notification-coverage").textContent.includes("3 / 3") && element("notification-coverage").textContent.includes("上次完成"));
+    check("conciseNotificationStatus", element("notification-status").hidden && !element("notification-coverage"));
     check("notificationsListChangedFiles", document.querySelectorAll(".notification-card li").length === 2);
     document.querySelector(".notification-card button").click();
     await wait(() => element("notification-count").hidden);
@@ -413,6 +413,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     element("check-updates").click();
     await wait(() => testMessages.some(message => message.action === "updates-check"));
     check("notificationsDoNotStartDownloads", testMessages.filter(message => message.action.startsWith("updates-")).every(message => !message.payload || !message.payload.url));
+    element("settings-view").click();
+    element("update-notifications").checked = false;
+    await element("update-notifications").onchange();
+    check("mutedAlertsKeepDetection", !element("notification-interval").disabled && !element("check-updates").disabled && notificationState.status === "active");
+    element("notification-interval").value = "0";
+    await element("notification-interval").onchange();
+    check("neverStopsDetection", element("notification-interval").value === "0" && !element("notification-interval").disabled && element("check-updates").disabled && notificationState.status === "disabled");
+    element("notifications-view").click();
+    await wait(() => currentView === "notifications");
+    check("neverKeepsNotificationHistory", document.querySelector(".notification-card") && element("check-updates").disabled);
+    element("settings-view").click();
+    element("notification-interval").value = "60";
+    await element("notification-interval").onchange();
+    check("resumeDetectionWithoutSystemAlerts", !element("update-notifications").checked && !element("check-updates").disabled && notificationState.status === "active");
     results.passed = true;
   } catch (error) { results.passed = false; results.error = error.stack; }
   const report = document.createElement("output");

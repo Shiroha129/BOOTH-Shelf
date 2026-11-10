@@ -70,8 +70,18 @@ for (const [index, language] of ["zh-CN", "zh-TW", "ja", "en", "ko"].entries()) 
   window.eval(notifications + `
     notificationState = { enabled: true, status: "active", sourcesReady: 3, pages: 3, checked: 18, total: 7067, unavailable: 0, lastCheckedAt: "2026-11-10T01:00:00Z", items: [{ id: "notice1", itemId: "1", title: "Asset", files: ["Materials.zip"], createdAt: "2026-11-10T01:00:00Z", read: false }] };
     renderNotifications();
-    checkFixture("idleFrequency_${language}", element("notification-status").textContent.includes("60") && !element("check-updates").disabled);
-    checkFixture("incrementalCoverage_${language}", element("notification-coverage").textContent.includes("3 / 3") && element("notification-coverage").textContent.includes("18") && !element("notification-coverage").textContent.includes("7067"));
+    checkFixture("idleStatusHidden_${language}", element("notification-status").hidden && !element("check-updates").disabled);
+    checkFixture("noScanStatistics_${language}", !element("notification-coverage"));
+    notificationState.enabled = false;
+    renderNotifications();
+    checkFixture("mutedAlertsStillCheck_${language}", !element("check-updates").disabled && element("notification-count").textContent === "1");
+    notificationState.detectionEnabled = false;
+    notificationState.status = "disabled";
+    renderNotifications();
+    checkFixture("neverDisablesChecks_${language}", element("check-updates").disabled && element("notification-status").textContent === t("已关闭更新检测") && document.querySelector(".notification-card"));
+    notificationState.detectionEnabled = true;
+    notificationState.status = "active";
+    renderNotifications();
     checkFixture("notifications_${language}", document.querySelector(".notification-card li").textContent === "Materials.zip" && element("notification-count").textContent === "1");
     notificationState.busy = true;
     renderNotifications();
@@ -79,17 +89,17 @@ for (const [index, language] of ["zh-CN", "zh-TW", "ja", "en", "ko"].entries()) 
     notificationState.busy = false;
     notificationState.status = "error";
     renderNotifications();
-    checkFixture("retryStatus_${language}", element("notification-status").textContent === t("部分检查未完成，保留进度并稍后重试"));
+    checkFixture("retryStatus_${language}", element("notification-status").textContent === t("检查未完成，稍后重试"));
     notificationState.sources = [{ id: "bought", error: false, ownership: 0 }, { id: "free", error: true, ownership: 10 }];
     renderNotifications();
-    checkFixture("sourceErrorDetails_${language}", element("notification-status").textContent.includes(t("免费")) && element("notification-status").textContent.includes("10"));
+    checkFixture("sourceErrorsStayConcise_${language}", element("notification-status").textContent === t("检查未完成，稍后重试"));
     notificationState.status = "paused";
     renderNotifications();
     checkFixture("pausedCannotCheck_${language}", element("check-updates").disabled);
     notificationState.status = "active";
     notificationState.total = 0;
     renderNotifications();
-    checkFixture("noDownloadsIdle_${language}", element("check-updates").disabled && element("notification-status").textContent === t("本地库暂无已下载资产，不会自动检查更新。"));
+    checkFixture("noDownloadsIdle_${language}", element("check-updates").disabled && element("notification-status").hidden);
     boothAccessState = { paused: true, reason: "rate-limit", retryAt: new Date(Date.now() + 1200000).toISOString() };
     renderBoothAccess();
     checkFixture("cooldownBlocksResume_${language}", element("booth-access-resume").disabled && !element("booth-access-banner").hidden);
@@ -104,11 +114,14 @@ for (const [index, language] of ["zh-CN", "zh-TW", "ja", "en", "ko"].entries()) 
 let savedInterval;
 window.desktopRequest = async (action, payload) => {
   if (action === "settings-save") { savedInterval = payload.notificationIntervalMinutes; return { notificationIntervalMinutes: savedInterval }; }
-  return { status: "active", enabled: true, total: 1, intervalMinutes: savedInterval, items: [] };
+  return { status: savedInterval === 0 ? "disabled" : "active", detectionEnabled: savedInterval !== 0, enabled: false, total: 1, intervalMinutes: savedInterval, items: [] };
 };
 window.element("notification-interval").value = "180";
 await window.element("notification-interval").onchange();
-check("intervalSavedThroughBridge", savedInterval === 180 && window.element("notification-status").textContent.includes("180"));
+check("intervalSavedThroughBridge", savedInterval === 180 && !window.element("check-updates").disabled);
+window.element("notification-interval").value = "0";
+await window.element("notification-interval").onchange();
+check("neverSavedThroughBridge", savedInterval === 0 && window.element("check-updates").disabled);
 dom.window.close();
 const result = { passed: true, checks: Object.keys(checks).length, results: checks, environment: "jsdom; no real browser layout or live account" };
 await fs.writeFile(path.join(root, "tests/notifications-dom-result.json"), JSON.stringify(result, null, 2));

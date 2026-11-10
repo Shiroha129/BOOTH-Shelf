@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 — 2026-11-10
+
+- Simplify notifications and settings.
+- Separate Windows alerts from update checks, with a Never option to stop checking.
+
 ## 1.0.0 — 2026-11-10
 
 - Pace BOOTH requests and pause automatic access when the site restricts it.

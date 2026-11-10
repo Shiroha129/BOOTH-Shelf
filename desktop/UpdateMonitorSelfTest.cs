@@ -247,11 +247,19 @@ internal static class UpdateMonitorSelfTest
         monitor.SetDownloadedLibrary(fixture.Library, Files(1, 1, 41, 81));
         Check(monitor.State()["total"]!.GetValue<int>() == 3, "下载范围未按资产去重");
         await monitor.CheckBatchAsync(fixture.Read, CancellationToken.None);
+        var systemAlerts = 0;
+        monitor.NewNotifications += count => systemAlerts += count;
+        monitor.SystemNotificationsEnabled = false;
         var changed = fixture.Time.AddMinutes(1);
         foreach (var id in new[] { 1, 2, 41, 42, 81, 82 }) fixture.Update(id, changed);
         await fixture.Round(monitor);
         var ids = monitor.State()["items"]!.AsArray().Select(item => item!["itemId"]!.ToString()).Order().ToArray();
         Check(ids.SequenceEqual(new[] { "1", "41", "81" }), "未下载的资产产生了更新通知");
+        Check(systemAlerts == 0 && !monitor.State()["enabled"]!.GetValue<bool>() && monitor.State()["detectionEnabled"]!.GetValue<bool>(),
+            "关闭系统通知后仍弹出提醒或停止了软件内部检测");
+        monitor.SystemNotificationsEnabled = true;
+        await fixture.Round(monitor);
+        Check(systemAlerts == 0, "重新开启系统通知后补发了旧提醒");
         monitor.SetDownloadedLibrary(fixture.Library, Files(41));
         Check(monitor.State()["items"]!.AsArray().Count == 1, "删除本地资产后仍显示旧通知");
         monitor.SetInterval(180);
@@ -274,8 +282,28 @@ internal static class UpdateMonitorSelfTest
         fixture.Time = fixture.Time.AddMinutes(181);
         await monitor.CheckBatchAsync(fixture.Read, CancellationToken.None);
         Check(monitor.State()["items"]!.AsArray().Count == oldCount + 1, "重新加入已下载资产后新更新未通知");
+        Check(systemAlerts == 1, "重新开启系统通知后没有提醒新变化");
+        monitor.SetInterval(0);
+        var previousNotices = monitor.State()["items"]!.AsArray().Count;
+        var previousCalls = fixture.Handler.Calls;
+        fixture.Reads.Clear();
+        fixture.Update(1, fixture.Time.AddMinutes(1));
+        fixture.Time = fixture.Time.AddDays(2);
+        monitor.RequestCheck();
+        Check(!monitor.Due && !monitor.State()["detectionEnabled"]!.GetValue<bool>()
+            && !await monitor.CheckBatchAsync(fixture.Read, CancellationToken.None)
+            && fixture.Reads.Count == 0 && fixture.Handler.Calls == previousCalls && systemAlerts == 1,
+            "选择从不后仍发送检查请求或系统通知");
+        Check(monitor.State()["items"]!.AsArray().Count == previousNotices
+            && JsonNode.Parse(System.IO.File.ReadAllText(Path.Combine(root, "update-monitor-state.json")))!["intervalMinutes"]!.GetValue<int>() == 0,
+            "关闭检查丢失已有通知或没有保存从不选项");
+        monitor.SetInterval(60);
+        Check(monitor.Due, "重新选择检查频率后未恢复检测");
+        await monitor.CheckBatchAsync(fixture.Read, CancellationToken.None);
+        Check(monitor.State()["items"]!.AsArray().Count == previousNotices + 1 && systemAlerts == 2, "恢复检测后没有发现新的文件变化");
         return new JsonObject { ["downloadedOnly"] = true, ["deduplicated"] = true, ["removedAssetsHidden"] = true,
-            ["intervalChangeReschedules"] = true, ["emptyLocalLibraryIdle"] = true, ["redownloadBaseline"] = true };
+            ["intervalChangeReschedules"] = true, ["emptyLocalLibraryIdle"] = true, ["redownloadBaseline"] = true,
+            ["systemAlertsIndependent"] = true, ["neverSendsNoRequests"] = true, ["neverPreservesNotices"] = true, ["detectionResumes"] = true };
     }
 
     private static async Task BoundaryCasesAsync(string root)

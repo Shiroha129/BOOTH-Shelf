@@ -1,4 +1,4 @@
-let appUpdateState = { status: "idle", currentVersion: "1.0.0" };
+let appUpdateState = { status: "idle", currentVersion: "1.0.1" };
 let pendingAppUpdate = null;
 let appUpdateReleasePending = false;
 let appUpdateReleaseError = "";
@@ -33,7 +33,7 @@ function renderAppUpdate() {
     ready: "更新 {version} 已下载，可重启安装", installing: "正在重启以安装更新…", error: "软件更新失败，请重试"
   }[status] || "尚未检查软件更新";
   const statusText = t(source, { version });
-  element("app-update-current-version").textContent = t("当前版本：{version}", { version: String(state.currentVersion || "1.0.0") });
+  element("app-update-current-version").textContent = t("当前版本：{version}", { version: String(state.currentVersion || "1.0.1") });
   element("app-update-status").textContent = statusText;
   element("app-update-banner-title").textContent = statusText;
   const checkedAt = state.lastCheckedAt ? new Date(state.lastCheckedAt) : null;
@@ -55,9 +55,6 @@ function renderAppUpdate() {
     received: appUpdateBytes(received), total: appUpdateBytes(total), percent: new Intl.NumberFormat(I18n.locale, { style: "percent", maximumFractionDigits: 0 }).format(fraction)
   }) : t("已下载 {received} · 总大小未知", { received: appUpdateBytes(received) });
   for (const prefix of ["app-update", "app-update-banner"]) {
-    element(prefix + "-note").textContent = t(status === "ready" ? "更新已下载，点击后重启并安装。"
-      : ["downloading", "installing"].includes(status) ? "下载完成后将自动重启安装。" : "点击“下载并重启”后下载更新，完成后自动重启安装。");
-    element(prefix + "-note").hidden = status === "installing";
     element(prefix + "-start").textContent = t(status === "ready" ? "重启并安装更新" : status === "error" ? "重试下载并重启" : "下载并重启");
     element(prefix + "-start").hidden = !canStart;
     element(prefix + "-start").disabled = busy || Boolean(pendingAppUpdate);

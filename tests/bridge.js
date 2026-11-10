@@ -1,6 +1,6 @@
 const testFixture = {
   testing: true,
-  appUpdate: { status: "idle", currentVersion: "1.0.0" },
+  appUpdate: { status: "idle", currentVersion: "1.0.1" },
   systemLanguage: "zh-CN",
   settings: { currency: "CNY", downloadDirectory: "C:\\TestDownloads", rememberSession: true, pinnedTags: [], language: "auto", closeBehavior: "ask", updateNotifications: true, notificationIntervalMinutes: 60 },
   boothAccess: { paused: false },
@@ -80,7 +80,8 @@ window.chrome.webview = {
           result = testFixture.notifications; break;
         case "updates-list": case "updates-check":
           testFixture.notifications.enabled = testFixture.settings.updateNotifications;
-          testFixture.notifications.status = testFixture.settings.updateNotifications ? "active" : "disabled";
+          testFixture.notifications.detectionEnabled = testFixture.settings.notificationIntervalMinutes !== 0;
+          testFixture.notifications.status = testFixture.notifications.detectionEnabled ? "active" : "disabled";
           testFixture.notifications.intervalMinutes = testFixture.settings.notificationIntervalMinutes;
           result = testFixture.notifications; break;
         case "booth-access-resume": testFixture.boothAccess = { paused: false }; result = testFixture.boothAccess; break;

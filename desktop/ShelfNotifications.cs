@@ -9,15 +9,17 @@ internal sealed partial class ShelfWindow
     private CancellationTokenSource? updateCancellation;
     private Task? updateTask;
     private AccountSession? updateSession;
-    private bool NotificationsEnabled => preferences["updateNotifications"]?.GetValue<bool>() != false;
     private string? notificationError;
 
     private void InitializeNotifications()
     {
-        updateMonitor = new UpdateMonitor(Program.DataDirectory, access: boothAccess);
+        updateMonitor = new UpdateMonitor(Program.DataDirectory, access: boothAccess)
+        {
+            SystemNotificationsEnabled = preferences["updateNotifications"]?.GetValue<bool>() != false
+        };
         updateMonitor.SetInterval(preferences["notificationIntervalMinutes"]!.GetValue<int>());
         RefreshNotificationLibrary();
-        updateMonitor.NewNotifications += count => { if (!closingSession && NotificationsEnabled) tray?.ShowUpdates(count); };
+        updateMonitor.NewNotifications += count => { if (!closingSession) tray?.ShowUpdates(count); };
         updateMonitor.Progress += () => { if (!closingSession && !IsDisposed) Reply(new { type = "updates", state = NotificationState() }); };
         if (Program.SmokeTest) return;
         if (tray != null) tray.NotificationClicked += () => Reply(new { type = "updates-open" });
@@ -28,15 +30,14 @@ internal sealed partial class ShelfWindow
     private JsonObject NotificationState()
     {
         var state = updateMonitor.State();
-        state["enabled"] = NotificationsEnabled;
-        state["status"] = !NotificationsEnabled ? "disabled" : boothAccess.Paused ? "paused" : !sessionVerified ? "login" : syncing ? "syncing"
+        state["status"] = !updateMonitor.Enabled ? "disabled" : boothAccess.Paused ? "paused" : !sessionVerified ? "login" : syncing ? "syncing"
             : notificationError != null || state["issue"]?.GetValue<bool>() == true ? "error" : "active";
         return state;
     }
 
     private async Task CheckUpdatesAsync()
     {
-        if (Program.SmokeTest || !NotificationsEnabled || !sessionVerified || syncing || closingSession || IsDisposed || boothAccess.Paused || !updateMonitor.Due || updateTask is { IsCompleted: false }) return;
+        if (Program.SmokeTest || !sessionVerified || syncing || closingSession || IsDisposed || boothAccess.Paused || !updateMonitor.Due || updateTask is { IsCompleted: false }) return;
         updateTimer.Stop();
         updateTask = RunUpdateBatchAsync();
         try { await updateTask; }
@@ -91,7 +92,7 @@ internal sealed partial class ShelfWindow
         boothAccess.ThrowIfPaused();
         RefreshNotificationLibrary();
         if (!sessionVerified) throw new InvalidOperationException("请先登录 BOOTH 后检查更新");
-        if (!NotificationsEnabled) throw new InvalidOperationException("请先在设置中开启资产更新通知");
+        if (!updateMonitor.Enabled) throw new InvalidOperationException("请先在设置中选择更新检查频率");
         updateMonitor.RequestCheck();
         _ = CheckUpdatesAsync();
         return NotificationState();
