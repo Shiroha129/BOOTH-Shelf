@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.2 — 2026-11-12
+
+- Quickly refresh the library automatically on startup.
+- Add a Start with Windows option in settings.
+
 ## 1.0.1 — 2026-11-10
 
 - Simplify notifications and settings.

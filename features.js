@@ -370,6 +370,12 @@ for (const action of ["tray", "exit"]) element("close-" + action).onclick = asyn
     element("close-error").hidden = false;
   } finally { controls.forEach(control => { control.disabled = false; }); }
 };
+element("start-with-windows").onchange = async () => {
+  element("start-with-windows").disabled = true;
+  try { settings = await desktopRequest("settings-save", { startWithWindows: element("start-with-windows").checked }); }
+  catch (error) { notify(error.message, true); }
+  finally { element("start-with-windows").disabled = false; renderSettings(); }
+};
 element("close-behavior").onchange = async () => {
   element("close-behavior").disabled = true;
   try { settings = await desktopRequest("settings-save", { closeBehavior: element("close-behavior").value }); }

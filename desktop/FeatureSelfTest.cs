@@ -160,12 +160,14 @@ internal static class FeatureSelfTest
                 simplified: !document.querySelector('.favorite') && !document.getElementById('favorites-view') && element('view-title').textContent === '资料库'
               };
               setSnapshot({items:[{...item,url:'https://booth.pm/ja/items/1',image:''},{id:'2',title:'Red Dress',shop:'Artist',tags:['Other'],image:''}],syncedAt:new Date().toISOString(),complete:true});
+              element('more-tags').click();
               document.querySelector('.tag-button').click();
               checks.tagButtons = document.querySelectorAll('.card').length === 1 && selectedTags.size === 1;
               element('clear-filters').click();
               checks.clear = selectedTags.size === 0 && document.querySelectorAll('.card').length === 2;
               showView('settings');
               checks.settings = !element('settings-panel').hidden && element('library-panel').hidden;
+              checks.startupOption = !element('start-with-windows').checked && element('start-with-windows').closest('#settings-panel') !== null;
               showView('library');
               element('sync-progress').hidden = false;
               notify('同步完成',false,true);
@@ -174,6 +176,16 @@ internal static class FeatureSelfTest
             """);
         var report = JsonNode.Parse(result)!.AsObject();
         Check(report.All(entry => entry.Value?.GetValue<bool>() == true), "筛选或界面检查失败：" + result);
+        await view.ExecuteScriptAsync("showView('settings'); element('start-with-windows').click();");
+        await Task.Delay(150);
+        Check(await view.ExecuteScriptAsync("settings.startWithWindows === true && element('start-with-windows').checked && !element('start-with-windows').disabled") == "true", "设置页未保存开机自启的开启状态");
+        await view.ExecuteScriptAsync("element('start-with-windows').click();");
+        await Task.Delay(150);
+        Check(await view.ExecuteScriptAsync("settings.startWithWindows === false && !element('start-with-windows').checked && !element('start-with-windows').disabled") == "true", "设置页未保存开机自启的关闭状态");
+        using (var preview = File.Create(Path.Combine(Program.DataDirectory, "startup-settings-preview.png")))
+            await view.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, preview);
+        await view.ExecuteScriptAsync("showView('library');");
+        report["startupSettings"] = true;
         await Task.Delay(10200);
         Check(await view.ExecuteScriptAsync("element('sync-status').hidden && element('sync-progress').hidden") == "true", "完成提示未在十秒后隐藏");
         await view.ExecuteScriptAsync("notify('已完成',false,true); notify('新的进度');");

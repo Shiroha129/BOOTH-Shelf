@@ -19,6 +19,7 @@ internal static class CoreSelfTest
         try
         {
             report["language"] = LanguageSelfTest.Run(Subdirectory(run, "language"));
+            report["windowsStartup"] = WindowsStartupSelfTest.Run(Subdirectory(run, "windows-startup"));
             report["runtimeInstaller"] = await RuntimeInstallerSelfTest.RunAsync(Subdirectory(run, "runtime-installer"));
             report["appUpdateClient"] = await AppUpdateClientSelfTest.RunAsync(Subdirectory(run, "app-update-client"));
             report["appUpdateInstaller"] = await AppUpdateInstallerSelfTest.RunAsync(Subdirectory(run, "app-update-installer"));

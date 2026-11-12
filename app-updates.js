@@ -1,4 +1,4 @@
-let appUpdateState = { status: "idle", currentVersion: "1.0.1" };
+let appUpdateState = { status: "idle", currentVersion: "1.0.2" };
 let pendingAppUpdate = null;
 let appUpdateReleasePending = false;
 let appUpdateReleaseError = "";
@@ -33,7 +33,7 @@ function renderAppUpdate() {
     ready: "更新 {version} 已下载，可重启安装", installing: "正在重启以安装更新…", error: "软件更新失败，请重试"
   }[status] || "尚未检查软件更新";
   const statusText = t(source, { version });
-  element("app-update-current-version").textContent = t("当前版本：{version}", { version: String(state.currentVersion || "1.0.1") });
+  element("app-update-current-version").textContent = t("当前版本：{version}", { version: String(state.currentVersion || "1.0.2") });
   element("app-update-status").textContent = statusText;
   element("app-update-banner-title").textContent = statusText;
   const checkedAt = state.lastCheckedAt ? new Date(state.lastCheckedAt) : null;

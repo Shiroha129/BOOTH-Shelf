@@ -29,6 +29,7 @@ let shopScrollTop = 0;
 let authenticationState = null;
 let authenticationPending = false;
 let authenticationTimer;
+let startupSyncPending = false;
 let sessionBackup = {};
 let systemLanguage = navigator.language;
 let lastNotice = "";
@@ -65,6 +66,7 @@ function setAuth(authenticated) {
   element("retry-auth").hidden = authenticated != null;
   element("settings-auth").textContent = t(authenticated === true ? "已登录" : authenticated === false ? "未登录" : "暂时无法确认登录状态");
   element("login-privacy").hidden = authenticationState !== false || currentView !== "library";
+  startStartupSync();
 }
 
 async function refreshAuthentication(retry = true) {
@@ -75,8 +77,15 @@ async function refreshAuthentication(retry = true) {
   if (authenticationState == null) element("auth-state").textContent = t("正在检查登录…");
   try { const result = await desktopRequest("auth-check"); setAuth(result.authenticated); }
   catch { setAuth(null); }
-  finally { authenticationPending = false; element("retry-auth").disabled = false; }
+  finally { authenticationPending = false; element("retry-auth").disabled = false; startStartupSync(); }
   if (retry && authenticationState == null) authenticationTimer = setTimeout(() => refreshAuthentication(false), 8000);
+}
+
+function startStartupSync() {
+  if (!startupSyncPending || authenticationState !== true || authenticationPending || syncing || boothAccessState.paused) return;
+  startupSyncPending = false;
+  element("sync-mode").value = "quick";
+  synchronize();
 }
 
 function setSnapshot(value) {
@@ -462,6 +471,7 @@ function renderSettings() {
   element("download-directory").textContent = settings.downloadDirectory || "";
   element("currency-select").value = settings.currency || "CNY";
   element("close-behavior").value = settings.closeBehavior || "ask";
+  element("start-with-windows").checked = settings.startWithWindows === true;
   element("update-notifications").checked = settings.updateNotifications !== false;
   element("notification-interval").value = String(settings.notificationIntervalMinutes ?? 60);
   element("notification-interval").disabled = false;
@@ -498,6 +508,7 @@ async function run(action) {
 
 async function synchronize() {
   if (syncing) return;
+  startupSyncPending = false;
   syncing = true;
   element("sync").disabled = true;
   element("sync-mode").disabled = true;
@@ -596,7 +607,7 @@ document.addEventListener("DOMContentLoaded", () => run(async () => {
   boothAccessState = stored.boothAccess || {};
   filterPresets = stored.filterPresets || [];
   notificationState = stored.notifications || { items: [] };
-  appUpdateState = stored.appUpdate || { status: "idle", currentVersion: "1.0.1" };
+  appUpdateState = stored.appUpdate || { status: "idle", currentVersion: "1.0.2" };
   systemLanguage = stored.systemLanguage || navigator.language;
   I18n.set(settings.language || "auto", systemLanguage);
   downloads = stored.downloads || [];
@@ -611,5 +622,6 @@ document.addEventListener("DOMContentLoaded", () => run(async () => {
   element("sync-mode").value = stored.pendingMode || (snapshot.items.length ? "quick" : "full");
   await desktopRequest("window", { action: "ready" });
   if (stored.testing) { setAuth(false); return; }
+  startupSyncPending = Boolean(stored.snapshot?.syncedAt) && stored.pendingMode !== "full";
   refreshAuthentication();
 }));

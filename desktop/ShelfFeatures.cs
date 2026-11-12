@@ -30,6 +30,7 @@ internal sealed partial class ShelfWindow
         preferences["pinnedTags"] ??= new JsonArray();
         preferences["language"] ??= "auto";
         preferences["closeBehavior"] ??= "ask";
+        preferences["startWithWindows"] = !Program.SmokeTest && WindowsStartup.Enabled;
         preferences["updateNotifications"] ??= true;
         preferences["notificationIntervalMinutes"] ??= 60;
         boothAccess = new BoothRequestPolicy(Program.DataDirectory);
@@ -84,6 +85,7 @@ internal sealed partial class ShelfWindow
             updated["closeBehavior"] = value;
         }
         if (payload?["updateNotifications"] is JsonValue notifications) updated["updateNotifications"] = notifications.GetValue<bool>();
+        if (payload?["startWithWindows"] is JsonValue startup) updated["startWithWindows"] = startup.GetValue<bool>();
         if (payload?["notificationIntervalMinutes"] is JsonValue interval)
         {
             var minutes = interval.GetValue<int>();
@@ -91,6 +93,7 @@ internal sealed partial class ShelfWindow
             updated["notificationIntervalMinutes"] = minutes;
         }
         SyncCache.AtomicWrite(preferencesPath, updated.ToJsonString());
+        if (!Program.SmokeTest && payload?["startWithWindows"] != null) WindowsStartup.SetEnabled(updated["startWithWindows"]!.GetValue<bool>());
         preferences = updated;
         updateMonitor.SetInterval(preferences["notificationIntervalMinutes"]!.GetValue<int>());
         updateMonitor.SystemNotificationsEnabled = preferences["updateNotifications"]!.GetValue<bool>();
