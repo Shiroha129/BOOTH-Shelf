@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.6 — 2026-11-17
+
+### 中文
+
+- 合并购买选项和商品简介中的适配型号，统一模型别名并去重。
+- 下载文件列表新增“已下载”标志。
+
+### 日本語
+
+- 購入バリエーションと商品説明の対応アバターをまとめ、別名と重複を整理。
+- ダウンロードするファイルの一覧に「ダウンロード済み」を表示。
+
+### English
+
+- Merge supported avatars from purchase options and descriptions, normalize aliases and remove duplicates.
+- Mark downloaded files in the download selection list.
+
 ## 1.0.5 — 2026-11-17
 
 ### 中文

@@ -41,6 +41,41 @@ await window.I18n.ready;
 await wait(() => window.document.querySelector("#grid .item-link"));
 const harness = window.testHarness;
 const names = variations => Array.from(harness.compatibility({ title: "Outfit", description: "", variations: variations.map(name => ({ name, price: 1000 })) }));
+const compatibility = (description, variations = [], title = "Outfit") => Array.from(harness.compatibility({ title, description, variations: variations.map(name => ({ name })) }));
+const publicHair = JSON.parse(await read("tests/fixtures/product-compatibility.json"));
+assert.deepEqual(Array.from(harness.compatibility(publicHair)), publicHair.expected);
+assert.deepEqual(compatibility(publicHair.description.replace("【桔梗対応】撮影用衣装", "【13アバター対応】Sweet Rebellion")), publicHair.expected);
+check("descriptionOnlyProductHasAllTwentyModels", true);
+assert.deepEqual(compatibility(publicHair.description, ["Manuka [-25%OFF]", "ミルフィ/エク用", "Full Set"]),
+  ["Manuka", "Milfy", "Eku", ...publicHair.expected.filter(name => !["Manuka", "Milfy", "Eku"].includes(name))]);
+check("variantsAndDescriptionAreMergedWithoutAliasDuplicates", true);
+assert.deepEqual(names(["ＭＡＮＵＫＡ", "マヌカちゃん用", "まぬか", "Manukaマヌカ", "しゅあん/Shuan", "シュアン", "海咲-Misaki-", "みさき用", "ミルフィ Milfy", "みるふぃ", "Vivian/ヴィヴィアン/비비안"]),
+  ["Manuka", "Shuan", "Misaki", "Milfy", "Vivian"]);
+check("mixedScriptsAndHonorificsReferToOneModel", true);
+assert.deepEqual(names(["しお/Sio", "ソルト/Salt", "真央/mao", "Mayoまよ", "舞夜/Maya", "Milfy/ミルフィ", "Milltina/ミルティナ", "Lime/Chiffon/Chocolat"]),
+  ["Sio", "Salt", "Mao", "Mayo", "Maya", "Milfy", "Milltina", "Lime", "Chiffon", "Chocolat"]);
+check("SimilarNamesAndSharedBodiesRemainDistinct", true);
+for (const heading of ["◈ 対応アバター ◈", "◆対応モデル一覧◆", "【対応アバター】", "■ 対応アバター：", "Supported avatars:", "Compatible with:", "适配模型：", "支援模型：", "대응 아바타"]) {
+  assert.deepEqual(compatibility(`${heading}\n・Manuka（マヌカ）\n\n- しなの用\n\n【商品内容】\nFBX\nUnityPackage`), ["Manuka", "Shinano"], heading);
+}
+check("decoratedAndTranslatedCompatibilityHeadings", true);
+assert.deepEqual(compatibility("対応アバター\nマヌカ\nしなの (未対応)\nMayo (not supported)\nEku (対応予定)\nミルフィ\n商品説明\nLime\n使用アバター\nKipfel\nhttps://mukumi.booth.pm/items/5813187\nクレジット\n〇オリジナル3Dモデル『愛莉』\nhttps://booth.pm/ja/items/6082686\n利用規約\nManuka"), ["Manuka", "Milfy"]);
+check("unsupportedModelsAndCreditsAreNotCompatibility", true);
+assert.deepEqual(compatibility("作者はManukaで撮影しています。\nMayaで制作しました。\nhttps://booth.pm/ja/items/5058077\n【撮影用アバター】\n〇オリジナル3Dモデル『愛莉』\nhttps://booth.pm/ja/items/6082686"), []);
+check("proseAndUnrelatedProductLinksAreNotScannedForModelNames", true);
+assert.deepEqual(compatibility("対応アバター\n【マヌカ】\nhttps://jingo1016.booth.pm/items/5058077\n〇JINGO CHANNEL様 「セレスティア」\nhttps://booth.pm/ja/items/4035411\n〇オリジナル3Dモデル『ミルティナ』\nhttps://booth.pm/ja/items/6538026\n【対応シェイプキー】\nBreast_big\n【利用規約】"), ["Manuka", "Selestia", "Milltina"]);
+check("officialModelReferencesStripCreatorsAndProductLabels", true);
+assert.deepEqual(compatibility("対応アバター\n別の表記\nhttps://jingo1016.booth.pm/items/5058077\nマヌカちゃん用\n〇オリジナル3Dモデル『しなの』は未対応です\nhttps://booth.pm/ja/items/6106863\n利用規約"), ["Manuka"]);
+check("originalProductLinkResolvesAnUnlistedAliasWithoutInferringUnsupportedModels", true);
+assert.deepEqual(compatibility("対応アバター：New Avatar 2.0 / R2-D2\nhttps://example.booth.pm/items/9999998\n商品内容\nFBX", ["new avatar 2.0"]), ["new avatar 2.0", "R2-D2"]);
+check("unknownModelsKeepTheirNamesAndNumbers", true);
+assert.deepEqual(compatibility("対応アバター\n1. Manuka\n2. Eku\n【作者】\nJohn Doe"), ["Manuka", "Eku"]);
+check("numberedListsAndAuthorSectionAreClean", true);
+assert.deepEqual(compatibility("対応アバター：エク", ["Manuka"], "【複数アバター対応】【MA対応】【PB対応】【Quest対応】Outfit"), ["Manuka", "Eku"]);
+check("mergingTitleDoesNotAddTechnicalCompatibilityTags", true);
+assert.deepEqual(compatibility("・禁止事項・\n購入していないユーザーへの配布は禁止。\n📌12 avatar / Sio, Kikyo, Selestia, Shinra, Moe, Manuka, Mizuki, Shinano, Milltina, Kumaly, Mayo, LUMINA\n\n- Headset / Messy-bun hair https://chocolaterice.booth.pm/items/4804565\n\n- Update -\n2023/10/30\nLayered hush cut Hair has been released\n\nContents\nUnity Package\n\n- Special thanks -\nShinraちゃんモデル / @Yoni090"),
+  ["Sio", "Kikyo", "Selestia", "Shinra", "Moe", "Manuka", "Mizuki", "Shinano", "Milltina", "Kumaly", "Mayo", "Lumina"]);
+check("countedAvatarListFromPublicHairDescription", true);
 assert.deepEqual(names(["Full Set [20人]", "Milfy/Eku - (ミルフィ/エク用)", "Manuka - (マヌカ用)", "応援版"]), ["Milfy", "Eku", "Manuka"]);
 check("groupedAvatarNamesAndAliases", true);
 for (const bundle of ["FULLSET", "Fullset_ALL", "Full Pack", "Complete edition", "Complete", "ALL", "All-in-one", "All avatars", "Full Collection", "Bundle", "フル", "フルセット", "全種類セット", "全20種", "まとめ買いセット", "全套版", "全套裝"]) {
@@ -58,21 +93,21 @@ check("avatarCountsAreNotModelNames", true);
 assert.deepEqual(names(["Manuka", "manuka", "Ｍａｎｕｋａ用"]), ["Manuka"]);
 check("namesAreNormalizedAndDeduplicated", true);
 const discountedModels = ["Chocolat", "Eku", "kaguya", "manuka", "Miredo", "Mayo", "milfy", "Plum", "Ririka", "Rurune", "Salt", "Shinano"];
-assert.deepEqual(names(["Full Set [-30%OFF]", "Chiffon&Chocolat [-25%OFF]", ...discountedModels.slice(1).map(name => name + " [-25%OFF]"), "Fullset30%OFF", "BOOST [-25%OFF]"]), ["Chiffon", ...discountedModels]);
+assert.deepEqual(names(["Full Set [-30%OFF]", "Chiffon&Chocolat [-25%OFF]", ...discountedModels.slice(1).map(name => name + " [-25%OFF]"), "Fullset30%OFF", "BOOST [-25%OFF]"]), ["Chiffon", "Chocolat", "Eku", "Kaguya", "Manuka", "Miredo", "Mayo", "Milfy", "Plum", "Ririka", "Rurune", "Salt", "Shinano"]);
 check("discountedVariantsOnlyShowModelNames", true);
 assert.deepEqual(names(["【２５％ＯＦＦ】Manuka", "Manuka (25% off)", "Eku【25%オフ】", "Shinano [25%割引]", "Milfy/Eku - (ミルフィ/エク用) [-25%OFF]", "[-25%OFF]"]), ["Manuka", "Eku", "Shinano", "Milfy"]);
 check("discountMarkersNormalizeBeforeExclusionAndDeduplication", true);
-assert.deepEqual(names(["【SALE】Manuka 専用版（¥1,500）", "Eku用 [PC/Quest対応]", "[NEW] Shinano ver.1.2", "For Milfy (ミルフィ用)", "Chocolat - 25% OFF - ¥1200", "マヌカ専用【期間限定セール】", "Manuka [マヌカ用]"]), ["Manuka", "Eku", "Shinano", "Milfy", "Chocolat", "マヌカ"]);
+assert.deepEqual(names(["【SALE】Manuka 専用版（¥1,500）", "Eku用 [PC/Quest対応]", "[NEW] Shinano ver.1.2", "For Milfy (ミルフィ用)", "Chocolat - 25% OFF - ¥1200", "マヌカ専用【期間限定セール】", "Manuka [マヌカ用]"]), ["Manuka", "Eku", "Shinano", "Milfy", "Chocolat"]);
 check("commercialAndVersionAnnotationsAreNotModelNames", true);
-assert.deepEqual(names(["【期間限定セール 11/20まで】マヌカ専用", "[50% OFF until 11/20] Manuka", "【NEW!!】Milfy", "Eku 2割引", "［発売記念価格］Chocolat", "【25%割引中】Shinano"]), ["マヌカ", "Manuka", "Milfy", "Eku", "Chocolat", "Shinano"]);
+assert.deepEqual(names(["【期間限定セール 11/20まで】マヌカ専用", "[50% OFF until 11/20] Manuka", "【NEW!!】Milfy", "Eku 2割引", "［発売記念価格］Chocolat", "【25%割引中】Shinano"]), ["Manuka", "Milfy", "Eku", "Chocolat", "Shinano"]);
 check("promotionDatesAndCaptionsAreRemovedTogether", true);
 assert.deepEqual(names(["Model 2.0", "R2-D2", "【Manuka】 / (Eku)", "Manuka (PC)", "Eku [Quest]"]), ["Model 2.0", "R2-D2", "Manuka", "Eku"]);
 check("modelNumbersAndBracketedNamesArePreserved", true);
-assert.deepEqual(Array.from(harness.compatibility({ title: "Outfit", description: "対応アバター：マヌカ [-25%OFF] / ミルフィ【セール】", variations: [{ name: "Full Set [-30%OFF]" }] })), ["マヌカ", "ミルフィ"]);
+assert.deepEqual(Array.from(harness.compatibility({ title: "Outfit", description: "対応アバター：マヌカ [-25%OFF] / ミルフィ【セール】", variations: [{ name: "Full Set [-30%OFF]" }] })), ["Manuka", "Milfy"]);
 check("descriptionModelNamesUseTheSameCleanup", true);
-assert.deepEqual(Array.from(harness.compatibility({ title: "Outfit", description: "対応アバター：マヌカ / ミルフィ\n\n■利用規約\n再配布禁止", variations: [{ name: "通常版" }, { name: "支援版" }] })), ["マヌカ", "ミルフィ"]);
+assert.deepEqual(Array.from(harness.compatibility({ title: "Outfit", description: "対応アバター：マヌカ / ミルフィ\n\n■利用規約\n再配布禁止", variations: [{ name: "通常版" }, { name: "支援版" }] })), ["Manuka", "Milfy"]);
 check("singleGenericEditionUsesDescription", true);
-assert.deepEqual(Array.from(harness.compatibility({ title: "【しなの対応】Outfit", description: "", variations: [{ name: "商品" }] })), ["しなの"]);
+assert.deepEqual(Array.from(harness.compatibility({ title: "【しなの対応】Outfit", description: "", variations: [{ name: "商品" }] })), ["Shinano"]);
 check("singleGenericEditionUsesTitle", true);
 assert.deepEqual(Array.from(harness.compatibility({ title: "Outfit", description: "-Milfy-\n〇オリジナル3Dモデル「ミルフィ」\nhttps://booth.pm/ja/items/1\n\n【対応シェイプキー】\n-Milfy-\nBreast_big", variations: [{ name: "Full Set" }] })), ["Milfy"]);
 check("modelReferencesDoNotIncludeShapeKeys", true);

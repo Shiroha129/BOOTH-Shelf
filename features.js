@@ -48,6 +48,7 @@ function renderCurrency() {
 function renderLocalCount() {
   element("local-count").textContent = new Set(localFiles.map(file => file.itemId)).size.toLocaleString(I18n.locale);
   element("shop-count").textContent = new Set((snapshot.items || []).map(shopKey)).size.toLocaleString(I18n.locale);
+  updateFileDownloadedState();
 }
 function applyLanguage() {
   I18n.set(settings.language || "auto", systemLanguage);

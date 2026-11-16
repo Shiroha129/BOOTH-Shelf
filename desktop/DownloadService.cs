@@ -252,6 +252,7 @@ internal sealed class DownloadService : IDisposable
             var record = new JsonObject
             {
                 ["id"] = Guid.NewGuid().ToString("N"), ["itemId"] = selection.ItemId, ["title"] = selection.Title,
+                ["fileId"] = file["id"]!.DeepClone(),
                 ["image"] = selection.Image, ["shop"] = selection.Shop,
                 ["name"] = file["name"]!.DeepClone(), ["state"] = "queued", ["bytes"] = 0L,
                 ["createdAt"] = DateTimeOffset.UtcNow.ToString("O")

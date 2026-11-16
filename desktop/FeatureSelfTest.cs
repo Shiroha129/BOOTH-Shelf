@@ -100,6 +100,7 @@ internal static class FeatureSelfTest
         service.Enqueue(ticket, ["102"]);
         await WaitDownloadsAsync(service);
         Check(service.History[0]!["state"]!.GetValue<string>() == "completed", "文件传输未完成：" + service.History.ToJsonString());
+        Check(service.History[0]!["fileId"]?.GetValue<string>() == "102", "下载记录未保留 BOOTH 文件标识");
         var firstPath = service.History[0]!["path"]!.GetValue<string>();
         Check(File.ReadAllText(firstPath).EndsWith("/102") && Path.GetFileName(firstPath) == "two.zip" && !File.Exists(firstPath + ".part")
             && fetched.SequenceEqual(new[] { "/downloadables/102" }), "选择下载或完成重命名失败");
@@ -197,6 +198,7 @@ internal static class FeatureSelfTest
             globalThis.savedRequest = desktopRequest;
             globalThis.queuedFiles = null;
             desktopRequest = async (action,payload) => {
+              if (action === 'local-list') return structuredClone(localFiles);
               if (action === 'files') return {ticket:'test',directory:'C:\\Downloads\\BOOTH-Shelf',files:[{id:'101',name:'选中的衣装.zip',size:8388608},{id:'102',name:'另一款式.zip',size:1073741824}]};
               if (action === 'product') return {id:payload.id,title:'Original item title',description:'Original description\n第二行原文',images:[],variations:[{name:'Full Set [-30%OFF]'},{name:'Milfy/Eku - (ミルフィ/エク用) [-25%OFF]'},{name:'応援版'}]};
               if (action === 'downloads-start') { globalThis.queuedFiles = payload.ids; return payload.ids.length; }
@@ -222,7 +224,7 @@ internal static class FeatureSelfTest
             "文件勾选窗口没有仅下载所选文件");
         await view.ExecuteScriptAsync("""
             snapshot.items[0].image = 'https://example.test/avatar.jpg';
-            localFiles = [{id:'native-local',itemId:'1',title:snapshot.items[0].title,name:'old.zip'}];
+            localFiles = [{id:'native-local',itemId:'1',fileId:'101',title:snapshot.items[0].title,name:'old.zip'}];
             showView('local');
             document.querySelector('#grid .cover').click();
             element('local-download').click();
@@ -230,6 +232,8 @@ internal static class FeatureSelfTest
         await Task.Delay(150);
         Check(await view.ExecuteScriptAsync("element('file-dialog').open && !element('local-dialog').open && fileSelection.files.length === 2 && element('file-product').textContent === snapshot.items[0].title") == "true", "本地详情未打开同一资产的补充下载");
         report["additionalLocalDownloads"] = true;
+        Check(await view.ExecuteScriptAsync("document.querySelectorAll('.file-downloaded-badge:not([hidden])').length === 1 && document.querySelector('.file-downloaded-badge:not([hidden])').textContent === '已下载' && !document.querySelector('.file-option input').disabled") == "true", "下载窗口未按文件显示已下载状态");
+        report["downloadedFileMarker"] = true;
         Check(await view.ExecuteScriptAsync("""
             (() => {
               element('file-dialog').close();

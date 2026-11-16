@@ -447,6 +447,17 @@ function updateFileSelection() {
   element("download-selected").disabled = !fileSelection || chosen === 0;
 }
 
+function updateFileDownloadedState() {
+  if (!fileSelection) return;
+  const saved = localFiles.filter(file => file.itemId === fileSelection.itemId);
+  for (const badge of element("file-list").querySelectorAll(".file-downloaded-badge")) {
+    const id = badge.closest(".file-option").querySelector("input").value;
+    const file = fileSelection.files.find(file => file.id === id);
+    badge.hidden = !saved.some(record => record.fileId ? record.fileId === id : record.name === file.name);
+    badge.textContent = t("已下载");
+  }
+}
+
 async function openFiles(item) {
   if (!canDownload(item)) return;
   const request = ++fileRequest;
@@ -460,7 +471,10 @@ async function openFiles(item) {
   try {
     const response = await desktopRequest("files", { id: item.id });
     if (request !== fileRequest) return;
-    fileSelection = response;
+    const saved = await desktopRequest("local-list");
+    if (request !== fileRequest) return;
+    localFiles = saved;
+    fileSelection = { ...response, itemId: item.id };
     element("file-directory").textContent = response.directory;
     const fragment = document.createDocumentFragment();
     for (const file of response.files) {
@@ -476,7 +490,9 @@ async function openFiles(item) {
       const size = document.createElement("span");
       size.className = "file-size";
       size.textContent = downloadFileSize(file.size);
-      label.append(input, name, size);
+      const downloaded = document.createElement("span");
+      downloaded.className = "file-downloaded-badge";
+      label.append(input, name, size, downloaded);
       if (file.material) {
         const badge = document.createElement("span");
         badge.className = "material-badge";
@@ -488,6 +504,7 @@ async function openFiles(item) {
       fragment.append(label);
     }
     element("file-list").replaceChildren(fragment);
+    renderLocalCount();
     updateFileSelection();
   } catch (error) {
     if (request !== fileRequest) return;

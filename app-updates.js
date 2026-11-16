@@ -1,4 +1,4 @@
-let appUpdateState = { status: "idle", currentVersion: "1.0.5" };
+let appUpdateState = { status: "idle", currentVersion: "1.0.6" };
 let pendingAppUpdate = null;
 let appUpdateReleasePending = false;
 let appUpdateReleaseError = "";

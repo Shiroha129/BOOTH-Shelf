@@ -24,12 +24,18 @@ const style = window.document.createElement("style");
 style.textContent = await read("styles.css");
 window.document.head.append(style);
 const scripts = await Promise.all(["tests/bridge.js", "i18n.js", "parser.js", "library-filters.js", "app.js", "features.js", "product-details.js", "filter-presets.js", "notifications.js", "app-updates.js"].map(read));
-window.eval(scripts.join("\n;\n") + "\nwindow.testHarness = { messages: testMessages, emit: data => testListeners.forEach(listener => listener({ data })), size: value => downloadFileSize(value) };");
+window.eval(scripts.join("\n;\n") + "\nwindow.testHarness = { messages: testMessages, fixture: testFixture, emit: data => testListeners.forEach(listener => listener({ data })), size: value => downloadFileSize(value) };");
 window.document.dispatchEvent(new window.Event("DOMContentLoaded"));
 await window.I18n.ready;
 await wait(() => window.document.querySelector("#grid .download-button"));
 const element = id => window.document.getElementById(id);
 const harness = window.testHarness;
+harness.fixture.localFiles = [
+  { id: "saved-material", itemId: "1", fileId: "101", name: "original-material-name.zip" },
+  { id: "legacy-record", itemId: "1", name: "Outfit_Milfy.zip" },
+  { id: "other-product", itemId: "2", fileId: "104", name: "Outfit_エク.zip" },
+  { id: "replaced-file", itemId: "1", fileId: "999", name: "Outfit_エク.zip" }
+];
 
 window.document.querySelector("#grid .download-button").click();
 await wait(() => window.document.querySelectorAll(".file-option").length === 4);
@@ -41,8 +47,23 @@ check("gigabytePreview", options[1].querySelector(".file-size").textContent === 
 check("smallFilesStillUseMegabytes", options[2].querySelector(".file-size").textContent === "0.5 MB");
 check("unavailableSizeIsExplicit", options[3].querySelector(".file-size").textContent === "大小未知");
 check("sizeUsesRedText", window.getComputedStyle(options[0].querySelector(".file-size")).color === "rgb(200, 50, 50)");
+const downloaded = index => options[index].querySelector(".file-downloaded-badge");
+check("downloadWindowRefreshesLocalFileState", harness.messages.some(message => message.action === "local-list"));
+check("downloadedFileMatchesItsBoothId", !downloaded(0).hidden && downloaded(0).textContent === "已下载");
+check("downloadedMarkerFollowsFileSize", options[0].querySelector(".file-size").nextElementSibling === downloaded(0));
+check("legacyRecordMatchesExactNameInSameProduct", !downloaded(1).hidden);
+check("otherProductAndReplacedFilesAreNotMarked", downloaded(2).hidden && downloaded(3).hidden);
+check("materialAndDownloadedLabelsCanCoexist", options[0].querySelector(".material-badge") && !downloaded(0).hidden);
 options[0].querySelector(".file-size").click();
 check("sizeLabelStillSelectsFile", options[0].querySelector("input").checked);
+const completedFile = { id: "new-file", itemId: "1", fileId: "104", name: "Outfit_エク.zip" };
+harness.emit({ type: "local-files", items: [...harness.fixture.localFiles, completedFile] });
+check("finishedDownloadUpdatesOpenDialog", !downloaded(2).hidden);
+check("downloadStateUpdatePreservesSelection", options[0].querySelector("input").checked && element("file-selection-count").textContent === "已选 1 / 4");
+harness.emit({ type: "local-files", items: [completedFile] });
+check("removedLocalFilesLoseTheirMarkers", downloaded(0).hidden && downloaded(1).hidden && !downloaded(2).hidden);
+downloaded(2).click();
+check("downloadedFileCanStillBeSelected", options[2].querySelector("input").checked);
 for (const [name, value, expected] of [
   ["belowGigabyte", 1024 ** 3 - 1, "1024.0 MB"], ["exactGigabyte", 1024 ** 3, "1.0 GB"],
   ["aboveGigabyte", 1024 ** 3 + 1, "1.0 GB"], ["zeroBytes", 0, "0.0 MB"],
@@ -86,6 +107,7 @@ for (const language of ["zh-CN", "zh-TW", "ja", "en", "ko"]) {
   check("translatedDownloadActions_" + language, element("local-download").textContent === window.I18n.t("下载其他文件")
     && window.document.querySelector(".download-row > button").textContent === window.I18n.t("打开目录"));
   check("translatedUnknownSize_" + language, [...window.document.querySelectorAll(".file-size")].at(-1).textContent === window.I18n.t("大小未知"));
+  check("translatedDownloadedMarker_" + language, window.document.querySelector(".file-downloaded-badge:not([hidden])").textContent === window.I18n.t("已下载"));
 }
 dom.window.close();
 const result = { passed: true, checks: Object.keys(checks).length, results: checks, environment: "jsdom and test bridge; no real downloads or Explorer" };
