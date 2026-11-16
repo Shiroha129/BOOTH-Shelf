@@ -121,6 +121,7 @@ input::placeholder { color: #969ba5; }
 .card h2 { font-size: 13px; line-height: 1.6; height: 42px; margin: 0 0 15px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .card-bottom { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
 .item-id { color: #a0a5af; font-size: 10px; }
+.downloaded-badge { color: #c83232; font-size: 12px; margin-left: auto; }
 .download-button { background: #fbefeb; color: #b14b39; padding: 7px 11px; border-radius: 5px; font-size: 12px; }
 .download-button:hover { background: #f5ded5; }
 .empty { text-align: center; padding: 70px 20px; color: #8c929c; }

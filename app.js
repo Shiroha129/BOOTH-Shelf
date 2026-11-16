@@ -119,7 +119,7 @@ if (desktopMode) {
     if (message.type === "auth") { setAuth(message.authenticated); return; }
     if (message.type === "session") { sessionBackup = message.status || {}; renderSessionBackup(); return; }
     if (message.type === "downloads") { downloads = message.items || []; renderDownloads(); return; }
-    if (message.type === "local-files") { localFiles = message.items || []; renderLocalCount(); if (currentView === "local") render(); return; }
+    if (message.type === "local-files") { localFiles = message.items || []; renderLocalCount(); if (currentView === "local" || currentView === "library") render(); return; }
     if (message.type === "currency") { exchangeRates = message.rates || {}; renderCurrency(); render(); return; }
     if (message.type === "close-request") { showCloseChoice(); return; }
     if (message.type === "updates") { notificationState = message.state; renderNotifications(); return; }
@@ -151,7 +151,7 @@ function getFilters() {
   return {
     all: element("search").value, any: element("any-keywords").value, exclude: element("exclude-keywords").value,
     shop: element("shop-filter").value, category: element("category-filter").value, subcategory: element("subcategory-filter").value,
-    event: element("event-filter").value, form: element("form-filter").value, age: element("age-filter").value,
+    event: element("event-filter").value, form: element("form-filter").value, age: element("age-filter").value, downloadState: element("download-state-filter").value,
     tags: [...selectedTags], anyTags: [...anyTags], excludedTags: [...excludedTags]
   };
 }
@@ -260,7 +260,9 @@ function renderTags() {
 
 function filteredItems(items) {
   const filters = getFilters();
-  const filtered = items.filter(item => LibraryFilters.matches(item, filters));
+  const downloaded = new Set(localFiles.map(file => file.itemId));
+  const filtered = items.filter(item => LibraryFilters.matches(item, filters)
+    && (currentView === "local" || !filters.downloadState || downloaded.has(item.id) === (filters.downloadState === "downloaded")));
   const sort = element("sort").value;
   if (sort === "name") filtered.sort((left, right) => left.title.localeCompare(right.title, I18n.locale));
   if (sort === "shop") filtered.sort((left, right) => (left.shop || "").localeCompare(right.shop || "", I18n.locale));
@@ -284,11 +286,13 @@ function render() {
     button.querySelector("span").textContent = snapshot.items.filter(item => itemSections(item).includes(section) && (!selectedShop || shopKey(item) === selectedShop)).length.toLocaleString(I18n.locale);
   }
   element("library-tabs").hidden = currentView === "local";
+  element("download-state-label").hidden = currentView === "local";
   element("shop-selection").hidden = !selectedShop;
   element("last-sync").textContent = snapshot.syncedAt ? new Date(snapshot.syncedAt).toLocaleString(I18n.locale, { hour12: false }) : t("尚未同步");
   element("results").textContent = t("{count} 件商品", { count: filtered.length.toLocaleString(I18n.locale) });
   element("partial-state").textContent = snapshot.complete === false ? t("部分同步结果") : "";
   const fragment = document.createDocumentFragment();
+  const downloaded = new Set(localFiles.map(file => file.itemId));
   for (const item of filtered.slice((displayPage - 1) * pageSize, displayPage * pageSize)) {
     const card = element("card-template").content.cloneNode(true);
     card.querySelector(".card").dataset.itemId = item.id;
@@ -307,20 +311,26 @@ function render() {
     link.title = item.title;
     link.href = safeURL(item.url);
     card.querySelector(".item-id").textContent = "#" + item.id;
+    if (currentView === "library" && downloaded.has(item.id)) {
+      const badge = document.createElement("span");
+      badge.className = "downloaded-badge";
+      badge.textContent = t("已下载");
+      card.querySelector(".item-id").after(badge);
+    }
     card.querySelector(".card-price").textContent = priceText(item);
     card.querySelector(".card-price").title = t("订单中的商品金额（含 BOOST）；折算金额为参考值，非当时实际扣款币种金额");
     for (const link of card.querySelectorAll(".cover, .item-link")) link.onclick = event => { event.preventDefault(); openProduct(item); };
     card.querySelector(".download-button").onclick = () => openFiles(item);
     if (currentView !== "local" && (activeSection === "free" || !canDownload(item))) card.querySelector(".download-button").remove();
+    const assetCard = card.querySelector(".card");
+    assetCard.tabIndex = 0;
+    assetCard.setAttribute("aria-haspopup", "menu");
+    assetCard.oncontextmenu = event => openAssetMenu(event, item, assetCard);
+    assetCard.onkeydown = event => {
+      if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) openAssetMenu(event, item, assetCard);
+    };
     if (currentView === "local") {
       card.querySelector(".download-button").remove();
-      const localCard = card.querySelector(".card");
-      localCard.tabIndex = 0;
-      localCard.setAttribute("aria-haspopup", "menu");
-      localCard.oncontextmenu = event => openAssetMenu(event, item, localCard);
-      localCard.onkeydown = event => {
-        if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) openAssetMenu(event, item, localCard);
-      };
       for (const link of card.querySelectorAll(".cover, .item-link")) {
         link.removeAttribute("target");
         link.href = "#";
@@ -572,13 +582,13 @@ element("filter-toggle").onclick = () => {
   element("filter-toggle").setAttribute("aria-expanded", String(!element("filter-panel").hidden));
 };
 for (const id of ["search", "any-keywords", "exclude-keywords"]) element(id).oninput = () => { displayPage = 1; render(); };
-for (const id of ["category-filter", "subcategory-filter", "shop-filter", "event-filter", "form-filter", "age-filter", "sort"]) element(id).onchange = () => {
+for (const id of ["category-filter", "subcategory-filter", "shop-filter", "event-filter", "form-filter", "age-filter", "download-state-filter", "sort"]) element(id).onchange = () => {
   if (id === "category-filter") { element("subcategory-filter").value = ""; renderSubcategories(); }
   displayPage = 1;
   render();
 };
 element("clear-filters").onclick = () => {
-  for (const id of ["search", "any-keywords", "exclude-keywords", "category-filter", "subcategory-filter", "shop-filter", "event-filter", "form-filter", "age-filter", "tag-search"]) element(id).value = "";
+  for (const id of ["search", "any-keywords", "exclude-keywords", "category-filter", "subcategory-filter", "shop-filter", "event-filter", "form-filter", "age-filter", "download-state-filter", "tag-search"]) element(id).value = "";
   selectedTags.clear();
   anyTags.clear();
   excludedTags.clear();

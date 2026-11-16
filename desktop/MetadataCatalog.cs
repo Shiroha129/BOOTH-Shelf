@@ -22,6 +22,7 @@ internal sealed class MetadataCatalog : IDisposable
         cachePath = Path.Combine(root, "product-metadata.jsonl");
         client = handler == null ? new HttpClient() : new HttpClient(handler);
         client.Timeout = TimeSpan.FromSeconds(30);
+        client.MaxResponseContentBufferSize = 50 * 1024 * 1024;
         client.DefaultRequestHeaders.UserAgent.ParseAdd("BOOTH-Shelf/" + Program.AppVersion.ToString(3));
         if (File.Exists(cachePath))
             foreach (var line in File.ReadLines(cachePath))
@@ -70,6 +71,26 @@ internal sealed class MetadataCatalog : IDisposable
             ["variations"] = new JsonArray((data["variations"] as JsonArray ?? new JsonArray()).OfType<JsonObject>()
                 .Select(variant => (JsonNode)new JsonObject { ["name"] = variant["name"]?.DeepClone(), ["price"] = variant["price"]?.DeepClone() }).ToArray())
         };
+    }
+
+    internal async Task<(byte[] Data, string Extension)> ImageAsync(string url, CancellationToken token)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !uri.IsDefaultPort || uri.UserInfo.Length != 0
+            || !(uri.Host == "booth.pximg.net" || uri.Host.EndsWith(".pximg.net", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidDataException("图片链接无效。");
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        request.Headers.Referrer = new Uri("https://booth.pm/");
+        using var response = await requestsGate.RunAsync(() => access == null ? client.SendAsync(request, token) : access.SendAsync(client, request, token), token);
+        if (!response.IsSuccessStatusCode) throw new InvalidOperationException("图片下载失败，请稍后重试。");
+        var extension = response.Content.Headers.ContentType?.MediaType?.ToLowerInvariant() switch
+        {
+            "image/jpeg" => ".jpg", "image/png" => ".png", "image/gif" => ".gif", "image/webp" => ".webp",
+            "image/avif" => ".avif", "image/bmp" => ".bmp", "image/tiff" => ".tiff",
+            _ => throw new InvalidDataException("图片格式不支持。")
+        };
+        var data = await response.Content.ReadAsByteArrayAsync(token);
+        if (data.Length == 0) throw new InvalidDataException("图片文件为空。");
+        return (data, extension);
     }
 
     internal void Merge(JsonObject? snapshot)

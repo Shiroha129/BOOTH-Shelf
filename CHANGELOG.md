@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.4 — 2026-11-16
+
+### 中文
+
+- 商品大图和缩略图支持右键保存图片。
+- 资料库右键菜单新增“跳转网页”和“复制URLs”。
+- 本地库右键菜单新增“跳转资料库”，统一使用“跳转网页”。
+- 资料库显示“已下载”标记，支持已下载／未下载筛选。
+
+### 日本語
+
+- 商品の大きな画像・サムネイルを右クリックして画像を保存。
+- ライブラリの右クリックメニューに「商品ページを開く」「URLをコピー」を追加。
+- ローカルの右クリックメニューに「ライブラリで表示」を追加し、商品ページの操作名を統一。
+- 「ダウンロード済み」を表示し、ダウンロード済み／未ダウンロードで絞り込み。
+
+### English
+
+- Save product images from the main image or thumbnail context menu.
+- Add “Open webpage” and “Copy URLs” to the library context menu.
+- Add “Go to library” to the local menu and use “Open webpage” consistently.
+- Mark downloaded assets and filter by downloaded or not downloaded.
+
 ## 1.0.3 — 2026-11-16
 
 ### 中文

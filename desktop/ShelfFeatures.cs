@@ -144,6 +144,39 @@ internal sealed partial class ShelfWindow
         return true;
     }
 
+    private bool CopyProductUrl(string id)
+    {
+        if (!Regex.IsMatch(id, @"^\d{1,20}$")) throw new InvalidDataException("商品 ID 无效");
+        Clipboard.SetText("https://booth.pm/ja/items/" + id);
+        return true;
+    }
+
+    private async Task<bool> SaveProductImageAsync(JsonNode? payload)
+    {
+        var id = payload?["id"]?.GetValue<string>() ?? "";
+        var number = payload?["number"]?.GetValue<int>() ?? 0;
+        if (!Regex.IsMatch(id, @"^\d{1,20}$") || number is < 1 or > 10000) throw new InvalidDataException("图片链接无效。");
+        var image = await metadata.ImageAsync(payload?["url"]?.GetValue<string>() ?? "", lifetime.Token);
+        using var dialog = new SaveFileDialog
+        {
+            Title = NativeLanguage.Text("保存图片"),
+            Filter = NativeLanguage.Text("图片") + " (*" + image.Extension + ")|*" + image.Extension,
+            FileName = $"BOOTH-{id}-{number}{image.Extension}",
+            DefaultExt = image.Extension.TrimStart('.'),
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+            OverwritePrompt = true
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return false;
+        var temporary = dialog.FileName + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            await File.WriteAllBytesAsync(temporary, image.Data, lifetime.Token);
+            File.Move(temporary, dialog.FileName, true);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+        return true;
+    }
+
     private JsonArray LocalAction(JsonNode? payload)
     {
         localLibrary.Act(payload?["id"]?.GetValue<string>() ?? "", payload?["action"]?.GetValue<string>() ?? "");

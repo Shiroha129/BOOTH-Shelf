@@ -150,10 +150,13 @@ function closeAssetMenu(restoreFocus = false) {
 }
 function openAssetMenu(event, item, card) {
   event.preventDefault();
-  if (currentView !== "local" || !/^\d{1,20}$/.test(item.id)) return;
+  if (!["library", "local"].includes(currentView) || !/^\d{1,20}$/.test(item.id)) return;
   assetMenuItem = item;
   assetMenuCard = card;
   element("asset-web").href = "https://booth.pm/ja/items/" + item.id;
+  element("asset-copy").hidden = currentView !== "library";
+  element("asset-library").hidden = currentView !== "local";
+  element("asset-delete").hidden = currentView !== "local";
   const menu = element("asset-menu");
   menu.hidden = false;
   const bounds = card.getBoundingClientRect();
@@ -163,6 +166,18 @@ function openAssetMenu(event, item, card) {
   element("asset-web").focus({ preventScroll: true });
 }
 element("asset-web").onclick = () => closeAssetMenu();
+element("asset-copy").onclick = () => run(async () => {
+  const item = assetMenuItem;
+  closeAssetMenu();
+  if (!item) return;
+  await desktopRequest("copy-product-url", { id: item.id });
+  notify(t("链接已复制"), false, true);
+});
+element("asset-library").onclick = () => {
+  const item = assetMenuItem;
+  closeAssetMenu();
+  if (item && !locateLibraryItem(item.id)) notify(t("请先同步该资产，再定位到资料库。"), true);
+};
 element("asset-delete").onclick = () => run(async () => {
   const item = assetMenuItem;
   closeAssetMenu();
@@ -196,7 +211,7 @@ element("confirm-asset-delete").onclick = async () => {
   } finally {
     controls.forEach(control => { control.disabled = false; });
     renderLocalCount();
-    if (currentView === "local") render();
+    if (currentView === "local" || currentView === "library") render();
   }
 };
 document.addEventListener("pointerdown", event => { if (!event.target.closest("#asset-menu")) closeAssetMenu(); });
@@ -206,7 +221,7 @@ document.addEventListener("keydown", event => {
   if (event.key === "Tab") closeAssetMenu();
   if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
     event.preventDefault();
-    const controls = [...element("asset-menu").querySelectorAll("[role=menuitem]")];
+    const controls = [...element("asset-menu").querySelectorAll("[role=menuitem]")].filter(control => !control.hidden);
     const index = controls.indexOf(document.activeElement);
     controls[event.key === "Home" ? 0 : event.key === "End" ? controls.length - 1 : (index + (event.key === "ArrowUp" ? -1 : 1) + controls.length) % controls.length].focus();
   }
@@ -280,7 +295,7 @@ async function localAction(file, action) {
     localFiles = await desktopRequest("local-action", { id: file.id, action });
     renderLocalCount();
     renderLocalFiles();
-    if (currentView === "local") render();
+    if (currentView === "local" || currentView === "library") render();
   } catch (error) { element("local-error").textContent = I18n.message(error.message); element("local-error").hidden = false; }
 }
 for (const section of ["bought", "gift", "free"]) element("section-" + section).onclick = () => {
@@ -351,10 +366,10 @@ element("local-download").onclick = () => {
   element("local-dialog").close();
   openFiles(item);
 };
-element("local-show-library").onclick = () => {
-  const item = itemIndex.get(localItem?.id);
-  if (!item) { element("local-error").textContent = t("请先同步该资产，再定位到资料库。"); element("local-error").hidden = false; return; }
-  element("local-dialog").close();
+function locateLibraryItem(id) {
+  const item = itemIndex.get(id);
+  if (!item) return false;
+  if (element("local-dialog").open) element("local-dialog").close();
   if (!itemSections(item).includes(activeSection)) activeSection = itemSections(item).find(section => ["bought", "gift", "free"].includes(section));
   showView("library");
   element("clear-filters").click();
@@ -366,8 +381,14 @@ element("local-show-library").onclick = () => {
   card.classList.add("located-asset");
   card.focus({ preventScroll: true });
   card.scrollIntoView({ behavior: "smooth", block: "center" });
+  return true;
+}
+element("local-show-library").onclick = () => {
+  if (locateLibraryItem(localItem?.id)) return;
+  element("local-error").textContent = t("请先同步该资产，再定位到资料库。");
+  element("local-error").hidden = false;
 };
-element("local-refresh").onclick = () => run(async () => { localFiles = await desktopRequest("local-list"); renderLocalFiles(); renderLocalCount(); if (currentView === "local") render(); });
+element("local-refresh").onclick = () => run(async () => { localFiles = await desktopRequest("local-list"); renderLocalFiles(); renderLocalCount(); if (currentView === "local" || currentView === "library") render(); });
 element("local-folder").onclick = () => { element("file-menu").hidden = true; if (localSelected) localAction(localSelected, "folder"); };
 element("local-delete").onclick = () => {
   element("file-menu").hidden = true;

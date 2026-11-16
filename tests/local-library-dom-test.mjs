@@ -35,7 +35,7 @@ check("escapeRestoresFocus", element("asset-menu").hidden && window.document.act
 card.dispatchEvent(new window.KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true, cancelable: true }));
 check("keyboardContextMenu", !element("asset-menu").hidden);
 window.document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
-check("keyboardMenuNavigation", window.document.activeElement === element("asset-delete"));
+check("keyboardMenuNavigation", window.document.activeElement === element("asset-library"));
 element("asset-delete").click();
 await new Promise(resolve => setTimeout(resolve, 40));
 check("deletePreviewsFolders", element("asset-delete-dialog").open && element("asset-delete-paths").textContent.includes("1_测试衣装"));
@@ -82,7 +82,7 @@ for (const id of ["file-dialog", "local-dialog"]) {
 }
 for (const language of ["zh-CN", "zh-TW", "ja", "en", "ko"]) {
   window.I18n.set(language, language);
-  check("translatedAssetActions_" + language, element("asset-web").textContent === window.I18n.t("打开商品网页")
+  check("translatedAssetActions_" + language, element("asset-web").textContent === window.I18n.t("跳转网页")
     && element("asset-delete-description").textContent === window.I18n.t("整个资产文件夹及其中的所有文件（包括解压后的文件）将移到回收站。"));
 }
 dom.window.close();

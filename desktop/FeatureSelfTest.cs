@@ -243,6 +243,30 @@ internal static class FeatureSelfTest
             })()
             """) == "true", "本地头像未清除筛选并定位到资料库资产");
         report["localCoverLocation"] = true;
+        await view.ExecuteScriptAsync("""
+            document.querySelector('#grid .card').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:500,clientY:300}));
+            """);
+        Check(await view.ExecuteScriptAsync("!element('asset-menu').hidden && element('asset-web').textContent === '跳转网页' && !element('asset-copy').hidden && element('asset-library').hidden && element('asset-delete').hidden && element('asset-web').target === '_blank'") == "true", "资料库右键菜单内容或外部网页链接错误");
+        var previousClipboard = Clipboard.GetDataObject();
+        try
+        {
+            await view.ExecuteScriptAsync("element('asset-copy').click();");
+            await Task.Delay(150);
+            Check(Clipboard.ContainsText() && Clipboard.GetText() == "https://booth.pm/ja/items/1", "商品链接未复制到系统剪贴板");
+        }
+        finally { if (previousClipboard != null) Clipboard.SetDataObject(previousClipboard, true); else Clipboard.Clear(); }
+        report["libraryContextMenu"] = true;
+        report["productUrlClipboard"] = true;
+        await view.ExecuteScriptAsync("element('download-state-filter').value = 'downloaded'; element('download-state-filter').dispatchEvent(new Event('change'));");
+        Check(await view.ExecuteScriptAsync("document.querySelectorAll('#grid .card').length === 1 && document.querySelector('#grid .downloaded-badge').textContent === '已下载'") == "true", "已下载标记或筛选错误");
+        await view.ExecuteScriptAsync("element('download-state-filter').value = 'not-downloaded'; element('download-state-filter').dispatchEvent(new Event('change'));");
+        Check(await view.ExecuteScriptAsync("!document.querySelector('#grid .card[data-item-id=\"1\"]') && document.querySelector('#grid .card[data-item-id=\"2\"]') !== null") == "true", "未下载筛选未排除本地资产");
+        await view.ExecuteScriptAsync("element('clear-filters').click(); showView('local'); document.querySelector('#grid .card').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:500,clientY:300}));");
+        Check(await view.ExecuteScriptAsync("!element('asset-library').hidden && element('asset-copy').hidden && !element('asset-delete').hidden") == "true", "本地菜单未保留删除或添加资料库跳转");
+        await view.ExecuteScriptAsync("element('asset-library').click();");
+        Check(await view.ExecuteScriptAsync("currentView === 'library' && document.querySelector('#grid .card[data-item-id=\"1\"]').classList.contains('located-asset')") == "true", "本地右键菜单未定位到资料库");
+        report["downloadStateFiltering"] = true;
+        report["localMenuLibraryLocation"] = true;
         await view.ExecuteScriptAsync("document.querySelector('#grid .item-link').click();");
         await Task.Delay(150);
         Check(await view.ExecuteScriptAsync("element('product-dialog').open && !element('product-layout').hidden && element('product-title').textContent === 'Original item title' && element('product-description').textContent === 'Original description\\n第二行原文' && element('product-compatibility').textContent === 'MilfyEku'") == "true", "内置商品详情未保留原文字或排除全套、赞助选项");

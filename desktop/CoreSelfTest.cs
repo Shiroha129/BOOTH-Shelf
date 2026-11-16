@@ -294,6 +294,53 @@ internal static class CoreSelfTest
             Check(rejected, "不可用商品未提示失败");
         }
         var savedFolder = Path.Combine(root, "previous-download-directory", "asset");
+        var imageBytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j4ZkAAAAASUVORK5CYII=");
+        var imageType = "image/png";
+        var imageStatus = HttpStatusCode.OK;
+        var emptyImage = false;
+        var oversizedImage = false;
+        var imageCalls = 0;
+        using (var images = new MetadataCatalog(root, new TestHandler((request, _) =>
+        {
+            imageCalls++;
+            Check(request.RequestUri!.Host == "booth.pximg.net" && request.Headers.Referrer?.Host == "booth.pm", "图片下载地址或来源无效");
+            var content = new ByteArrayContent(emptyImage ? [] : imageBytes);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(imageType);
+            if (oversizedImage) content.Headers.ContentLength = 50 * 1024 * 1024 + 1;
+            return Task.FromResult(new HttpResponseMessage(imageStatus) { Content = content });
+        })))
+        {
+            const string imageUrl = "https://booth.pximg.net/original.png";
+            var image = await images.ImageAsync(imageUrl, CancellationToken.None);
+            Check(image.Data.SequenceEqual(imageBytes) && image.Extension == ".png", "图片保存未保留原始内容或格式");
+            var callsBeforeInvalidLinks = imageCalls;
+            foreach (var url in new[] { "file:///C:/private.png", "http://booth.pximg.net/image.png", "https://127.0.0.1/image.png", "https://booth.pximg.net.evil.test/image.png", "https://user@booth.pximg.net/image.png" })
+            {
+                var rejected = false;
+                try { await images.ImageAsync(url, CancellationToken.None); } catch (InvalidDataException) { rejected = true; }
+                Check(rejected, "图片下载允许不受信任的地址");
+            }
+            Check(imageCalls == callsBeforeInvalidLinks, "拒绝图片地址前已发起网络请求");
+            imageType = "text/html";
+            var invalidImage = false;
+            try { await images.ImageAsync(imageUrl, CancellationToken.None); } catch (InvalidDataException) { invalidImage = true; }
+            Check(invalidImage, "网页响应被保存为图片");
+            imageType = "image/png";
+            emptyImage = true;
+            invalidImage = false;
+            try { await images.ImageAsync(imageUrl, CancellationToken.None); } catch (InvalidDataException) { invalidImage = true; }
+            Check(invalidImage, "空文件被保存为图片");
+            emptyImage = false;
+            imageStatus = HttpStatusCode.NotFound;
+            invalidImage = false;
+            try { await images.ImageAsync(imageUrl, CancellationToken.None); } catch (InvalidOperationException) { invalidImage = true; }
+            Check(invalidImage, "图片下载失败未返回错误");
+            imageStatus = HttpStatusCode.OK;
+            oversizedImage = true;
+            invalidImage = false;
+            try { await images.ImageAsync(imageUrl, CancellationToken.None); } catch (HttpRequestException) { invalidImage = true; }
+            Check(invalidImage, "图片响应超过大小上限仍被读取");
+        }
         Directory.CreateDirectory(savedFolder);
         File.WriteAllText(Path.Combine(root, "downloads.json"), new JsonArray(
             new JsonObject { ["id"] = "saved", ["path"] = Path.Combine(savedFolder, "old.zip"), ["state"] = "completed" },
@@ -328,6 +375,8 @@ internal static class CoreSelfTest
             Check(rejected, "无效下载记录仍打开目录");
         }
         return new JsonObject { ["originalProductFields"] = true, ["invalidProductRejected"] = true, ["sizeMatchedToOwnership"] = true,
-            ["sizeRefreshesWhenReopened"] = true, ["unknownSizeAllowsSelection"] = true, ["recordDirectoryValidated"] = true };
+            ["sizeRefreshesWhenReopened"] = true, ["unknownSizeAllowsSelection"] = true, ["recordDirectoryValidated"] = true,
+            ["originalImageBytesAndFormat"] = true, ["imageOriginsValidatedBeforeRequests"] = true,
+            ["failedEmptyAndNonImageRejected"] = true, ["imageSizeLimited"] = true };
     }
 }

@@ -30,7 +30,8 @@ internal sealed class FilterPresetStore
         if (updated.OfType<JsonObject>().Any(preset => preset != existing && preset["name"]!.GetValue<string>() == name)) throw new InvalidDataException("已存在同名预设");
         if (existing == null && updated.Count >= 100) throw new InvalidDataException("预设最多保存 100 个");
         var filters = new JsonObject();
-        foreach (var key in new[] { "all", "any", "exclude", "shop", "category", "subcategory", "event", "form", "age" }) filters[key] = Text(source[key]);
+        foreach (var key in new[] { "all", "any", "exclude", "shop", "category", "subcategory", "event", "form", "age", "downloadState" }) filters[key] = Text(source[key]);
+        if (filters["downloadState"]!.GetValue<string>() is not ("" or "downloaded" or "not-downloaded")) throw new InvalidDataException("下载状态筛选无效");
         var used = new HashSet<string>();
         foreach (var key in new[] { "tags", "anyTags", "excludedTags" })
         {

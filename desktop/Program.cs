@@ -238,6 +238,8 @@ internal sealed partial class ShelfWindow : Form
                 "currency-refresh" => await currencyScheduler.RefreshAsync(message["payload"]?["force"]?.GetValue<bool>() == true, lifetime.Token),
                 "files" => await ListFilesAsync(message["payload"]?["id"]?.GetValue<string>() ?? ""),
                 "product" => await metadata.DetailAsync(message["payload"]?["id"]?.GetValue<string>() ?? "", lifetime.Token),
+                "copy-product-url" => CopyProductUrl(message["payload"]?["id"]?.GetValue<string>() ?? ""),
+                "save-product-image" => await SaveProductImageAsync(message["payload"]),
                 "downloads-start" => downloads.Enqueue(message["payload"]?["ticket"]?.GetValue<string>() ?? "",
                     message["payload"]?["ids"]?.AsArray().Select(id => id!.GetValue<string>()).ToArray() ?? []),
                 "downloads-cancel" => downloads.Cancel(message["payload"]?["id"]?.GetValue<string>() ?? ""),

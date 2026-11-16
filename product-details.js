@@ -2,6 +2,31 @@ let productItem = null;
 let productData = null;
 let productImageIndex = 0;
 let productRequest = 0;
+let productImageMenuTarget = null;
+let productImageMenuSource = null;
+
+function closeProductImageMenu(restoreFocus = false) {
+  element("product-image-menu").hidden = true;
+  if (restoreFocus && productImageMenuSource?.isConnected) productImageMenuSource.focus({ preventScroll: true });
+  productImageMenuTarget = null;
+  productImageMenuSource = null;
+}
+
+function openProductImageMenu(event, url, number) {
+  event.preventDefault();
+  const source = imageURL(url);
+  if (!source || !productData) return;
+  closeAssetMenu();
+  productImageMenuTarget = { id: productItem.id, url: source, number };
+  productImageMenuSource = event.currentTarget;
+  const menu = element("product-image-menu");
+  menu.hidden = false;
+  const bounds = event.currentTarget.getBoundingClientRect();
+  const keyboard = event.type === "keydown" || (!event.clientX && !event.clientY);
+  menu.style.left = Math.max(8, Math.min(keyboard ? bounds.left + 16 : event.clientX, innerWidth - menu.offsetWidth - 8)) + "px";
+  menu.style.top = Math.max(33, Math.min(keyboard ? bounds.top + 16 : event.clientY, innerHeight - menu.offsetHeight - 8)) + "px";
+  element("product-save-image").focus({ preventScroll: true });
+}
 
 function productCompatibility(data) {
   const text = value => String(value || "").normalize("NFKC").trim();
@@ -40,6 +65,7 @@ function productCompatibility(data) {
 }
 
 async function openProduct(item) {
+  closeProductImageMenu();
   const request = ++productRequest;
   productItem = item;
   productData = null;
@@ -80,7 +106,12 @@ function renderProduct() {
     const button = document.createElement("button");
     button.className = "product-thumbnail";
     button.setAttribute("aria-label", t("第 {number} 张图片", { number: index + 1 }));
+    button.setAttribute("aria-haspopup", "menu");
     button.onclick = () => { productImageIndex = index; renderProductImage(); };
+    button.oncontextmenu = event => openProductImageMenu(event, url, index + 1);
+    button.onkeydown = event => {
+      if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) openProductImageMenu(event, url, index + 1);
+    };
     const image = document.createElement("img");
     image.src = url;
     image.alt = "";
@@ -94,6 +125,7 @@ function renderProduct() {
 }
 
 function renderProductImage() {
+  closeProductImageMenu();
   const images = (productData.images || []).map(imageURL).filter(Boolean);
   const image = element("product-main-image");
   image.hidden = images.length === 0;
@@ -111,7 +143,26 @@ function renderProductImage() {
 }
 
 element("close-product").onclick = () => element("product-dialog").close();
-element("product-dialog").addEventListener("close", () => { productRequest++; productData = null; });
+element("product-dialog").addEventListener("close", () => { productRequest++; productData = null; closeProductImageMenu(); });
 element("product-retry").onclick = () => openProduct(productItem);
 element("product-previous").onclick = () => { productImageIndex--; renderProductImage(); };
 element("product-next").onclick = () => { productImageIndex++; renderProductImage(); };
+element("product-main-image").oncontextmenu = event => openProductImageMenu(event, element("product-main-image").getAttribute("src"), productImageIndex + 1);
+element("product-main-image").onkeydown = event => {
+  if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) openProductImageMenu(event, element("product-main-image").getAttribute("src"), productImageIndex + 1);
+};
+element("product-save-image").onclick = () => run(async () => {
+  const target = productImageMenuTarget;
+  closeProductImageMenu();
+  if (target && await desktopRequest("save-product-image", target)) notify(t("图片已保存"), false, true);
+});
+document.addEventListener("pointerdown", event => { if (!event.target.closest("#product-image-menu")) closeProductImageMenu(); });
+document.addEventListener("keydown", event => {
+  if (element("product-image-menu").hidden) return;
+  if (event.key === "Escape") { event.preventDefault(); closeProductImageMenu(true); }
+  if (event.key === "Tab") closeProductImageMenu();
+  if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) { event.preventDefault(); element("product-save-image").focus(); }
+});
+window.addEventListener("scroll", () => closeProductImageMenu(), true);
+window.addEventListener("resize", () => closeProductImageMenu());
+window.addEventListener("blur", () => closeProductImageMenu());

@@ -1,0 +1,125 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import assert from "node:assert/strict";
+import { JSDOM } from "jsdom";
+
+const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const read = name => fs.readFile(path.join(root, name), "utf8");
+const dom = new JSDOM(await read("index.html"), { url: "https://shelf.test/", runScripts: "outside-only", pretendToBeVisual: true });
+const { window } = dom;
+const element = id => window.document.getElementById(id);
+const checks = {};
+const check = (name, condition) => { assert.ok(condition, name); checks[name] = true; };
+const wait = async condition => {
+  for (let attempt = 0; attempt < 100 && !condition(); attempt++) await new Promise(resolve => setTimeout(resolve, 10));
+  assert.ok(condition(), "UI update timed out");
+};
+const catalog = JSON.parse(await read("locales.json"));
+window.fetch = async () => ({ ok: true, json: async () => catalog });
+window.structuredClone = structuredClone;
+window.scrollTo = () => {};
+window.HTMLElement.prototype.scrollIntoView = function () { this.dataset.scrolled = "true"; };
+window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+window.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new window.Event("close")); };
+const scripts = await Promise.all(["tests/bridge.js", ...[...window.document.querySelectorAll("script[src]")].map(script => script.getAttribute("src"))].map(read));
+window.eval(scripts.join("\n;\n") + `
+  window.testHarness = { messages: testMessages, fixture: testFixture,
+    emit: message => testListeners.forEach(listener => listener({ data: message })),
+    state: () => ({ view: currentView, section: activeSection, page: displayPage }) };
+`);
+const style = window.document.createElement("style");
+style.textContent = await read("styles.css");
+window.document.head.append(style);
+window.document.dispatchEvent(new window.Event("DOMContentLoaded"));
+await window.I18n.ready;
+await wait(() => window.document.querySelector("#grid .card"));
+const harness = window.testHarness;
+const card = id => window.document.querySelector(`#grid .card[data-item-id="${id}"]`);
+const context = target => {
+  const event = new window.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 450, clientY: 300 });
+  target.dispatchEvent(event);
+  return event;
+};
+const menuLabels = id => [...element(id).querySelectorAll("[role=menuitem]")].filter(button => !button.hidden).map(button => button.textContent);
+check("downloadedBadgeBesideId", card("1").querySelector(".item-id").nextElementSibling?.classList.contains("downloaded-badge"));
+check("onlyLocalAssetsMarked", card("1").querySelector(".downloaded-badge")?.textContent === "已下载" && !card("2").querySelector(".downloaded-badge"));
+check("downloadedBadgeIsRed", window.getComputedStyle(card("1").querySelector(".downloaded-badge")).color === "rgb(200, 50, 50)");
+check("libraryContextPreventsDefault", context(card("1").querySelector(".cover")).defaultPrevented);
+assert.deepEqual(menuLabels("asset-menu"), ["跳转网页", "复制URLs"]);
+check("libraryMenuHasOnlyRequestedActions", true);
+check("externalProductLink", element("asset-web").href === "https://booth.pm/ja/items/1" && element("asset-web").target === "_blank");
+element("asset-copy").click();
+await wait(() => harness.messages.some(message => message.action === "copy-product-url" && message.payload.id === "1"));
+check("copyUsesProductId", element("asset-menu").hidden && !element("product-dialog").open);
+context(card("2"));
+element("asset-web").click();
+check("externalActionDoesNotOpenProductDialog", element("asset-menu").hidden && !element("product-dialog").open);
+
+element("download-state-filter").value = "downloaded";
+element("download-state-filter").dispatchEvent(new window.Event("change"));
+check("downloadedFilter", window.document.querySelectorAll("#grid .card").length === 1 && card("1"));
+element("save-preset").click();
+element("preset-name").value = "Downloaded assets";
+element("preset-form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+await wait(() => harness.fixture.filterPresets.length === 1);
+check("downloadStateSavedInPreset", harness.fixture.filterPresets[0].filters.downloadState === "downloaded");
+element("clear-filters").click();
+check("clearResetsDownloadState", element("download-state-filter").value === "" && window.document.querySelectorAll("#grid .card").length === 3);
+window.document.querySelector(".preset-apply").click();
+check("presetRestoresDownloadState", element("download-state-filter").value === "downloaded" && card("1") && !card("2"));
+harness.emit({ type: "local-files", items: [] });
+check("removedLocalFilesUpdateFilteredLibrary", window.document.querySelectorAll("#grid .card").length === 0);
+element("download-state-filter").value = "not-downloaded";
+element("download-state-filter").dispatchEvent(new window.Event("change"));
+check("notDownloadedFilter", window.document.querySelectorAll("#grid .card").length === 3);
+harness.emit({ type: "local-files", items: harness.fixture.localFiles });
+check("completedDownloadsLeaveNotDownloadedFilter", !card("1") && card("2") && card("5"));
+element("clear-filters").click();
+
+element("local-view").click();
+await wait(() => harness.state().view === "local");
+context(card("1"));
+assert.deepEqual(menuLabels("asset-menu"), ["跳转网页", "跳转资料库", "删除"]);
+check("localMenuIncludesLibraryLocation", true);
+window.document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+check("menuKeyboardSkipsHiddenActions", window.document.activeElement === element("asset-library"));
+element("asset-library").click();
+check("localMenuLocatesWithoutOpeningDetails", harness.state().view === "library" && !element("local-dialog").open && card("1").classList.contains("located-asset") && window.document.activeElement === card("1"));
+
+card("1").querySelector(".cover").click();
+await wait(() => element("product-dialog").open && !element("product-layout").hidden);
+element("product-next").click();
+check("mainImageContextOpens", context(element("product-main-image")).defaultPrevented && !element("product-image-menu").hidden);
+assert.deepEqual(menuLabels("product-image-menu"), ["保存图片"]);
+element("product-save-image").click();
+await wait(() => harness.messages.some(message => message.action === "save-product-image"));
+let saved = harness.messages.findLast(message => message.action === "save-product-image").payload;
+check("mainImageSavesCurrentOriginal", saved.id === "1" && saved.url === harness.fixture.product.images[1] && saved.number === 2);
+context(element("product-thumbnails").firstElementChild.querySelector("img"));
+check("thumbnailRightClickDoesNotSwitchMainImage", element("product-main-image").src === harness.fixture.product.images[1]);
+element("product-save-image").click();
+await wait(() => harness.messages.filter(message => message.action === "save-product-image").length === 2);
+saved = harness.messages.findLast(message => message.action === "save-product-image").payload;
+check("thumbnailSavesClickedOriginal", saved.url === harness.fixture.product.images[0] && saved.number === 1);
+context(element("product-main-image"));
+const escape = new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+window.document.dispatchEvent(escape);
+check("escapeClosesImageMenuWithoutClosingProduct", escape.defaultPrevented && element("product-image-menu").hidden && element("product-dialog").open);
+check("escapeRestoresImageFocus", window.document.activeElement === element("product-main-image"));
+context(element("product-main-image"));
+element("product-description").dispatchEvent(new window.MouseEvent("pointerdown", { bubbles: true }));
+check("outsideClickClosesImageMenu", element("product-image-menu").hidden);
+context(element("product-main-image"));
+element("product-dialog").close();
+check("closingProductHidesImageMenu", element("product-image-menu").hidden);
+
+for (const language of ["zh-CN", "zh-TW", "ja", "en", "ko"]) {
+  for (const source of ["跳转网页", "复制URLs", "跳转资料库", "保存图片", "下载状态", "已下载", "未下载", "全部"]) check("translationAvailable_" + language + "_" + source, Array.isArray(catalog[source]) && catalog[source].length === 4);
+  window.I18n.set(language, language);
+  check("translatedNewActions_" + language, element("asset-web").textContent === window.I18n.t("跳转网页") && element("asset-library").textContent === window.I18n.t("跳转资料库") && element("product-save-image").textContent === window.I18n.t("保存图片"));
+  check("translatedDownloadFilter_" + language, element("download-state-filter").querySelector('[value="downloaded"]').textContent === window.I18n.t("已下载") && element("download-state-filter").querySelector('[value="not-downloaded"]').textContent === window.I18n.t("未下载"));
+}
+dom.window.close();
+await fs.writeFile(path.join(root, "tests/asset-actions-dom-result.json"), JSON.stringify({ passed: true, checks: Object.keys(checks).length, results: checks }, null, 2));
+console.log(JSON.stringify({ passed: true, checks: Object.keys(checks).length }));
