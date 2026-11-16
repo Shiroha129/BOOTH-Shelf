@@ -8,6 +8,7 @@ const allowed = new Set(["index.html", "styles.css", "app.js", "features.js", "p
 allowed.add("filter-presets.js");
 allowed.add("notifications.js");
 allowed.add("app-updates.js");
+allowed.add("product-details.js");
 for (const name of ["showcase.js", "outfit.svg", "hair.svg", "glasses.svg", "material.svg"]) allowed.add("tests/showcase/" + name);
 const server = http.createServer(async (request, response) => {
   try {

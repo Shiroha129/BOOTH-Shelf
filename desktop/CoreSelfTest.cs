@@ -41,6 +41,7 @@ internal static class CoreSelfTest
             report["downloadedNotifications"] = await UpdateMonitorSelfTest.DownloadedAsync(Subdirectory(run, "downloaded-notifications"));
             report["freeOwnership"] = await FreeOwnershipSelfTest.RunAsync(Subdirectory(run, "free-ownership"));
             report["downloadSelection"] = await DownloadSelectionAsync(Subdirectory(run, "download-selection"));
+            report["productDetails"] = await ProductDetailsAsync(Subdirectory(run, "product-details"));
             report["passed"] = true;
         }
         catch (Exception error)
@@ -232,7 +233,8 @@ internal static class CoreSelfTest
 
     private static async Task<JsonObject> DownloadSelectionAsync(string root)
     {
-        using var service = new DownloadService(root, () => throw new InvalidOperationException("缓存选择无需浏览器"), () => root, CancellationToken.None);
+        using var service = new DownloadService(root, () => throw new InvalidOperationException("缓存选择无需浏览器"), () => root, CancellationToken.None,
+            sizeHandler: new TestHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound))));
         var item = Item("1");
         item["files"]!.AsArray().Add(new JsonObject { ["id"] = "101", ["name"] = "Materials.zip", ["material"] = true });
         var preferredNames = new[] { "Outfit_MILFY.zip", "ミルフィ衣装.zip", "みるふぃ.zip", "Outfit_エク.zip", "Outfit_eku_v2.zip", "ﾐﾙﾌｨ.zip", "ＥＫＵ.zip", "えく.zip" };
@@ -253,5 +255,79 @@ internal static class CoreSelfTest
         Check(rejected && service.History.Count == 0, "允许未选文件加入下载");
         return new JsonObject { ["cachedFileList"] = true, ["materialFirst"] = true, ["preferredNamesAfterMaterials"] = true,
             ["stableFileOrder"] = true, ["noExtraMaterialFlags"] = true, ["selectionValidated"] = true };
+    }
+
+    private static async Task<JsonObject> ProductDetailsAsync(string root)
+    {
+        var sizeCalls = 0;
+        var changed = false;
+        var unavailable = false;
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send = (request, _) =>
+        {
+            var uri = request.RequestUri!;
+            if (uri.Host == "api.booth.pm")
+            {
+                Check(uri.AbsolutePath == "/vroid/items/123", "大小查询未使用商品 ID");
+                sizeCalls++;
+                if (unavailable) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent($$"""
+                    {"id":123,"variations":[{"id":10,"downloadables":[{"name":"Materials.zip","file_size":"{{(changed ? "9" : "8")}} MB"},{"name":"Common.zip","file_size":"1 MB"}]},{"id":11,"downloadables":[{"name":"Common.zip","file_size":"2 MB"}]}]}
+                    """) });
+            }
+            Check(uri.Host == "booth.pm" && uri.AbsolutePath is "/ja/items/123.json" or "/ja/items/404.json", "详情查询地址无效");
+            return Task.FromResult(uri.AbsolutePath.Contains("404") ? new HttpResponseMessage(HttpStatusCode.NotFound)
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""
+                    {"id":123,"tags":[],"name":"Original title","description":"Original description\n<script>literal text</script>","images":[{"original":"https://example.test/original.jpg","resized":"https://example.test/small.jpg"},{"resized":"https://example.test/second.jpg"}],"variations":[{"name":"Full Set","price":2000},{"name":"Milfy/Eku","price":1000}]}
+                    """) });
+        };
+        using (var catalog = new MetadataCatalog(root, new TestHandler(send)))
+        {
+            var detail = await catalog.DetailAsync("123", CancellationToken.None);
+            Check(detail["title"]!.GetValue<string>() == "Original title" && detail["description"]!.GetValue<string>().Contains("<script>literal text</script>"), "原商品文字未保留");
+            Check(detail["images"]![0]!.GetValue<string>() == "https://example.test/original.jpg" && detail["images"]![1]!.GetValue<string>() == "https://example.test/second.jpg", "商品原图或备用图映射错误");
+            Check(detail["variations"]!.AsArray().Count == 2 && detail["variations"]![1]!["name"]!.GetValue<string>() == "Milfy/Eku", "商品选项映射错误");
+            var rejected = false;
+            try { await catalog.DetailAsync("../123", CancellationToken.None); } catch (InvalidDataException) { rejected = true; }
+            Check(rejected, "允许无效商品 ID");
+            rejected = false;
+            try { await catalog.DetailAsync("404", CancellationToken.None); } catch (InvalidOperationException) { rejected = true; }
+            Check(rejected, "不可用商品未提示失败");
+        }
+        var savedFolder = Path.Combine(root, "previous-download-directory", "asset");
+        Directory.CreateDirectory(savedFolder);
+        File.WriteAllText(Path.Combine(root, "downloads.json"), new JsonArray(
+            new JsonObject { ["id"] = "saved", ["path"] = Path.Combine(savedFolder, "old.zip"), ["state"] = "completed" },
+            new JsonObject { ["id"] = "unsaved", ["state"] = "canceled" },
+            new JsonObject { ["id"] = "moved", ["path"] = Path.Combine(root, "missing-directory", "old.zip"), ["state"] = "completed" }).ToJsonString());
+        using var sizes = new TestHandler(send);
+        using var service = new DownloadService(root, () => throw new InvalidOperationException("离线测试不得启动浏览器"), () => root, CancellationToken.None, sizeHandler: sizes);
+        var item = new JsonObject { ["id"] = "123", ["title"] = "Outfit", ["section"] = "bought", ["files"] = new JsonArray(
+            new JsonObject { ["id"] = "101", ["name"] = "Materials.zip", ["material"] = true, ["variationIds"] = new JsonArray("10") },
+            new JsonObject { ["id"] = "102", ["name"] = "Common.zip", ["variationIds"] = new JsonArray("10") },
+            new JsonObject { ["id"] = "103", ["name"] = "Common.zip" },
+            new JsonObject { ["id"] = "104", ["name"] = "Known.zip", ["size"] = 512 }) };
+        var selection = await service.ListAsync(item);
+        var files = selection["files"]!.AsArray().OfType<JsonObject>().ToDictionary(file => file["id"]!.GetValue<string>());
+        Check(sizeCalls == 1 && files["101"]["size"]!.GetValue<string>() == "8 MB", "每文件大小未用单次查询补齐");
+        Check(files["102"]["size"]!.GetValue<string>() == "1 MB" && files["103"]["size"] == null && files["104"]["size"]!.GetValue<int>() == 512, "大小匹配未区分已购选项或覆盖已知大小");
+        Check(!selection.ToJsonString().Contains("downloadables"), "大小预览泄露下载地址");
+        changed = true;
+        selection = await service.ListAsync(item);
+        Check(sizeCalls == 2 && selection["files"]![0]!["size"]!.GetValue<string>() == "9 MB", "重复打开文件列表仍使用旧大小");
+        unavailable = true;
+        selection = await service.ListAsync(item);
+        Check(selection["files"]!.AsArray().Count == 4 && selection["files"]![0]!["size"] == null, "大小查询失败阻止选择已购文件");
+        var calls = sizeCalls;
+        await service.ListAsync(new JsonObject { ["id"] = "123", ["title"] = "Known", ["section"] = "bought", ["files"] = new JsonArray(new JsonObject { ["id"] = "105", ["name"] = "Known.zip", ["size"] = 0 }) });
+        Check(sizeCalls == calls, "已知大小的文件仍查询接口");
+        Check(service.GetFolder("saved") == savedFolder, "下载记录目录被当前设置替换");
+        foreach (var id in new[] { "unknown", "unsaved", "moved" })
+        {
+            var rejected = false;
+            try { service.GetFolder(id); } catch (Exception error) when (error is InvalidOperationException or DirectoryNotFoundException) { rejected = true; }
+            Check(rejected, "无效下载记录仍打开目录");
+        }
+        return new JsonObject { ["originalProductFields"] = true, ["invalidProductRejected"] = true, ["sizeMatchedToOwnership"] = true,
+            ["sizeRefreshesWhenReopened"] = true, ["unknownSizeAllowsSelection"] = true, ["recordDirectoryValidated"] = true };
     }
 }

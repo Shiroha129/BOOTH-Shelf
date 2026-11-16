@@ -65,8 +65,13 @@ function applyLanguage() {
   if (lastProgress) renderSyncProgress(lastProgress);
   updateFileSelection();
   for (const badge of document.querySelectorAll(".material-badge")) { badge.textContent = t("材质文件"); badge.title = t("根据文件名识别"); }
+  for (const size of document.querySelectorAll(".file-size")) {
+    const id = size.closest(".file-option").querySelector("input").value;
+    size.textContent = downloadFileSize(fileSelection?.files.find(file => file.id === id)?.size);
+  }
   if (localItem) renderLocalFiles();
   if (localSelected) selectLocalFile(localSelected); else element("local-details").textContent = t("选择文件查看详情");
+  if (typeof renderProduct === "function" && productData) renderProduct();
 }
 function renderShopPage() {
   const groups = new Map();
@@ -219,8 +224,10 @@ function openLocal(item) {
   element("local-title").textContent = item.title;
   element("local-shop").textContent = item.shop || "";
   element("local-cover").hidden = !imageURL(item.image);
+  element("local-show-library").hidden = !imageURL(item.image);
   if (imageURL(item.image)) element("local-cover").src = imageURL(item.image);
   element("local-details").textContent = t("选择文件查看详情");
+  element("local-download").disabled = !canDownload(item);
   element("local-error").hidden = true;
   element("file-menu").hidden = true;
   renderLocalFiles();
@@ -319,7 +326,7 @@ element("refresh-currency").onclick = () => run(async () => {
   finally { element("refresh-currency").disabled = false; }
 });
 element("close-local").onclick = () => element("local-dialog").close();
-for (const id of ["file-dialog", "local-dialog"]) {
+for (const id of ["file-dialog", "local-dialog", "product-dialog"]) {
   const dialog = element(id);
   let pressedBackdrop = false;
   const isBackdrop = event => {
@@ -337,6 +344,29 @@ for (const id of ["file-dialog", "local-dialog"]) {
   dialog.addEventListener("close", () => { pressedBackdrop = false; });
 }
 element("local-dialog").addEventListener("close", () => { element("file-menu").hidden = true; });
+element("local-download").onclick = () => {
+  const item = itemIndex.get(localItem?.id);
+  if (!item) { element("local-error").textContent = t("请先同步该商品，再选择下载文件。"); element("local-error").hidden = false; return; }
+  if (!canDownload(item)) return;
+  element("local-dialog").close();
+  openFiles(item);
+};
+element("local-show-library").onclick = () => {
+  const item = itemIndex.get(localItem?.id);
+  if (!item) { element("local-error").textContent = t("请先同步该资产，再定位到资料库。"); element("local-error").hidden = false; return; }
+  element("local-dialog").close();
+  if (!itemSections(item).includes(activeSection)) activeSection = itemSections(item).find(section => ["bought", "gift", "free"].includes(section));
+  showView("library");
+  element("clear-filters").click();
+  const index = filteredItems(sourceItems()).findIndex(candidate => candidate.id === item.id);
+  displayPage = Math.floor(index / pageSize) + 1;
+  render();
+  const card = [...element("grid").querySelectorAll(".card")].find(card => card.dataset.itemId === item.id);
+  card.tabIndex = -1;
+  card.classList.add("located-asset");
+  card.focus({ preventScroll: true });
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+};
 element("local-refresh").onclick = () => run(async () => { localFiles = await desktopRequest("local-list"); renderLocalFiles(); renderLocalCount(); if (currentView === "local") render(); });
 element("local-folder").onclick = () => { element("file-menu").hidden = true; if (localSelected) localAction(localSelected, "folder"); };
 element("local-delete").onclick = () => {

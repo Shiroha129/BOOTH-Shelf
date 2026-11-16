@@ -12,7 +12,8 @@ A Windows home for your BOOTH assets. Sync, filter, download, and keep up with f
 
 - **Organize assets**: sync purchases, gifts and free items; browse by shop.
 - **Filter quickly**: favorite tags, combine all / any / exclude rules, and save presets.
-- **Download and manage files**: choose purchased or gifted files to save; open files, locate folders, or move them to the Recycle Bin.
+- **Download and manage files**: preview file sizes in red MB／GB before selecting, download additional files from local asset details, and open each download's saved folder from its history.
+- **View item details**: browse images, the original description and supported avatars inside the app. Click the local detail image to locate the asset in the library.
 - **Get update alerts**: alerts for downloaded assets, checked hourly by default with an adjustable interval. Runs in the tray, too.
 - **Update the app**: automatically check GitHub for new versions, then download, install and restart from the app.
 - **Track spending**: order totals and reference currency conversion. UI available in English, Japanese, Simplified Chinese, Traditional Chinese and Korean.

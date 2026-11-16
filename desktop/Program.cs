@@ -142,7 +142,7 @@ internal sealed partial class ShelfWindow : Form
         {
             var assetDirectory = Path.Combine(Program.DataDirectory, "ui-0.5.7");
             Directory.CreateDirectory(assetDirectory);
-            foreach (var asset in new[] { "index.html", "styles.css", "app.js", "parser.js", "library-filters.js", "account-reader.js", "features.js", "filter-presets.js", "notifications.js", "app-updates.js", "i18n.js", "locales.json" })
+            foreach (var asset in new[] { "index.html", "styles.css", "app.js", "parser.js", "library-filters.js", "account-reader.js", "features.js", "product-details.js", "filter-presets.js", "notifications.js", "app-updates.js", "i18n.js", "locales.json" })
                 File.WriteAllText(Path.Combine(assetDirectory, asset), Program.ReadAsset(asset), new UTF8Encoding(false));
             environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(Program.DataDirectory, "WebView2")).WaitAsync(TimeSpan.FromSeconds(30), lifetime.Token);
             await view.EnsureCoreWebView2Async(environment).WaitAsync(TimeSpan.FromSeconds(30), lifetime.Token);
@@ -229,7 +229,7 @@ internal sealed partial class ShelfWindow : Form
                 "updates-check" => RequestUpdateCheck(),
                 "updates-read" => ReadNotifications(message["payload"]?["id"]?.GetValue<string>()),
                 "choose-directory" => ChooseDirectory(),
-                "open-download-folder" => OpenDownloadFolder(),
+                "open-download-folder" => OpenDownloadFolder(message["payload"]?["id"]?.GetValue<string>()),
                 "window" => WindowAction(message["payload"]?["action"]?.GetValue<string>() ?? ""),
                 "local-list" => localLibrary.List(),
                 "local-action" => LocalAction(message["payload"]),
@@ -237,6 +237,7 @@ internal sealed partial class ShelfWindow : Form
                 "local-asset-delete" => DeleteLocalAsset(message["payload"]),
                 "currency-refresh" => await currencyScheduler.RefreshAsync(message["payload"]?["force"]?.GetValue<bool>() == true, lifetime.Token),
                 "files" => await ListFilesAsync(message["payload"]?["id"]?.GetValue<string>() ?? ""),
+                "product" => await metadata.DetailAsync(message["payload"]?["id"]?.GetValue<string>() ?? "", lifetime.Token),
                 "downloads-start" => downloads.Enqueue(message["payload"]?["ticket"]?.GetValue<string>() ?? "",
                     message["payload"]?["ids"]?.AsArray().Select(id => id!.GetValue<string>()).ToArray() ?? []),
                 "downloads-cancel" => downloads.Cancel(message["payload"]?["id"]?.GetValue<string>() ?? ""),

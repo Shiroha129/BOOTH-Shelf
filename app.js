@@ -258,16 +258,21 @@ function renderTags() {
   element("more-tags").textContent = t(expandedTags ? "收起标签" : "展开全部标签");
 }
 
-function render() {
-  closeAssetMenu();
-  renderPresets();
-  const items = sourceItems();
+function filteredItems(items) {
   const filters = getFilters();
   const filtered = items.filter(item => LibraryFilters.matches(item, filters));
   const sort = element("sort").value;
   if (sort === "name") filtered.sort((left, right) => left.title.localeCompare(right.title, I18n.locale));
   if (sort === "shop") filtered.sort((left, right) => (left.shop || "").localeCompare(right.shop || "", I18n.locale));
   if (sort === "default" && currentView !== "local") filtered.sort((left, right) => rankOf(left) - rankOf(right));
+  return filtered;
+}
+
+function render() {
+  closeAssetMenu();
+  renderPresets();
+  const items = sourceItems();
+  const filtered = filteredItems(items);
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   displayPage = Math.min(displayPage, pages);
   element("total").textContent = String(snapshot.items.length);
@@ -286,6 +291,7 @@ function render() {
   const fragment = document.createDocumentFragment();
   for (const item of filtered.slice((displayPage - 1) * pageSize, displayPage * pageSize)) {
     const card = element("card-template").content.cloneNode(true);
+    card.querySelector(".card").dataset.itemId = item.id;
     card.querySelector(".cover").href = safeURL(item.url);
     const image = card.querySelector("img");
     const source = imageURL(item.image);
@@ -303,6 +309,7 @@ function render() {
     card.querySelector(".item-id").textContent = "#" + item.id;
     card.querySelector(".card-price").textContent = priceText(item);
     card.querySelector(".card-price").title = t("订单中的商品金额（含 BOOST）；折算金额为参考值，非当时实际扣款币种金额");
+    for (const link of card.querySelectorAll(".cover, .item-link")) link.onclick = event => { event.preventDefault(); openProduct(item); };
     card.querySelector(".download-button").onclick = () => openFiles(item);
     if (currentView !== "local" && (activeSection === "free" || !canDownload(item))) card.querySelector(".download-button").remove();
     if (currentView === "local") {
@@ -363,6 +370,16 @@ function bytes(value) {
   return (value / 1024 ** power).toFixed(power ? 1 : 0) + " " + ["B", "KB", "MB", "GB"][power];
 }
 
+function downloadFileSize(value) {
+  if (typeof value === "string") {
+    const match = value.trim().match(/^([\d,]+(?:\.\d+)?)\s*(B|KB|MB|GB|TB)$/i);
+    value = match ? Number(match[1].replaceAll(",", "")) * 1024 ** ["B", "KB", "MB", "GB", "TB"].indexOf(match[2].toUpperCase()) : null;
+  }
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return t("大小未知");
+  const gigabytes = value >= 1024 ** 3;
+  return (value / 1024 ** (gigabytes ? 3 : 2)).toFixed(1) + (gigabytes ? " GB" : " MB");
+}
+
 function renderDownloads() {
   element("download-count").textContent = downloads.filter(item => ["queued", "downloading"].includes(item.state)).length || "";
   element("download-empty").hidden = downloads.length > 0;
@@ -398,11 +415,9 @@ function renderDownloads() {
       action.textContent = t("取消");
       action.onclick = () => run(() => desktopRequest("downloads-cancel", { id: record.id }));
     } else {
-      action.textContent = t("选择文件");
-      action.onclick = () => {
-        const item = snapshot.items.find(item => item.id === record.itemId);
-        if (item) openFiles(item); else notify("请先同步该商品，再选择下载文件。", true);
-      };
+      action.textContent = t("打开目录");
+      action.disabled = !record.path;
+      action.onclick = () => run(() => desktopRequest("open-download-folder", { id: record.id }));
     }
     row.append(action);
     fragment.append(row);
@@ -443,8 +458,12 @@ async function openFiles(item) {
       input.value = file.id;
       input.onchange = updateFileSelection;
       const name = document.createElement("span");
+      name.className = "file-name";
       name.textContent = file.name;
-      label.append(input, name);
+      const size = document.createElement("span");
+      size.className = "file-size";
+      size.textContent = downloadFileSize(file.size);
+      label.append(input, name, size);
       if (file.material) {
         const badge = document.createElement("span");
         badge.className = "material-badge";
@@ -607,7 +626,7 @@ document.addEventListener("DOMContentLoaded", () => run(async () => {
   boothAccessState = stored.boothAccess || {};
   filterPresets = stored.filterPresets || [];
   notificationState = stored.notifications || { items: [] };
-  appUpdateState = stored.appUpdate || { status: "idle", currentVersion: "1.0.2" };
+  appUpdateState = stored.appUpdate || { status: "idle", currentVersion: "1.0.3" };
   systemLanguage = stored.systemLanguage || navigator.language;
   I18n.set(settings.language || "auto", systemLanguage);
   downloads = stored.downloads || [];

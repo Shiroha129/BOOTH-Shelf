@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -67,6 +68,7 @@ internal sealed class DownloadService : IDisposable
     private readonly Func<string> downloadDirectory;
     private readonly Action<SessionBrowser>? configureSession;
     private readonly BoothRequestPolicy? access;
+    private readonly HttpClient sizeClient;
     private readonly Dictionary<string, Selection> selections = new();
     private readonly Queue<(JsonObject Record, string Url, string Directory)> queue = new();
     private readonly JsonArray history;
@@ -94,9 +96,12 @@ internal sealed class DownloadService : IDisposable
     }
 
     internal DownloadService(string root, Func<Task<CoreWebView2Environment>> environment, Func<string> directory, CancellationToken token,
-        Action<SessionBrowser>? configureSession = null, BoothRequestPolicy? access = null)
+        Action<SessionBrowser>? configureSession = null, BoothRequestPolicy? access = null, HttpMessageHandler? sizeHandler = null)
     {
         this.access = access;
+        sizeClient = sizeHandler == null ? new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) : new HttpClient(sizeHandler);
+        sizeClient.Timeout = TimeSpan.FromSeconds(15);
+        sizeClient.DefaultRequestHeaders.UserAgent.ParseAdd("BOOTH-Shelf/" + Program.AppVersion.ToString(3));
         historyPath = Path.Combine(root, "downloads.json");
         this.environment = environment;
         downloadDirectory = directory;
@@ -142,7 +147,7 @@ internal sealed class DownloadService : IDisposable
                     copy["url"] = "https://booth.pm/downloadables/" + fileId;
                     return (JsonNode)copy;
                 }).ToArray());
-                return SelectFiles(item, available);
+                return await SelectFilesAsync(item, available);
             }
             if (listing == null)
             {
@@ -182,13 +187,40 @@ internal sealed class DownloadService : IDisposable
                 if (url.Scheme != "https" || url.Host != "booth.pm" || !Regex.IsMatch(url.AbsolutePath, @"^/downloadables/\d+/?$"))
                     throw new InvalidDataException("文件地址不属于 BOOTH 下载入口。");
             }
-            return SelectFiles(item, files);
+            return await SelectFilesAsync(item, files);
         }
         finally { listingLock.Release(); }
     }
 
-    private JsonObject SelectFiles(JsonObject item, JsonArray files)
+    private async Task FillFileSizesAsync(string id, JsonArray files)
     {
+        if (files.OfType<JsonObject>().All(file => file["size"] != null)) return;
+        JsonArray variants;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.booth.pm/vroid/items/" + id);
+            using var response = await (access == null ? sizeClient.SendAsync(request, lifetime) : access.SendAsync(sizeClient, request, lifetime));
+            response.EnsureSuccessStatusCode();
+            var data = JsonNode.Parse(await response.Content.ReadAsStringAsync(lifetime));
+            if (data?["id"]?.ToString() != id || data["variations"] is not JsonArray values) return;
+            variants = values;
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { throw; }
+        catch (Exception error) when (error is HttpRequestException or IOException or JsonException or InvalidOperationException or TaskCanceledException) { return; }
+        foreach (var file in files.OfType<JsonObject>().Where(file => file["size"] == null))
+        {
+            var owned = (file["variationIds"] as JsonArray ?? new JsonArray()).Select(value => value!.ToString()).ToArray();
+            var matches = variants.OfType<JsonObject>().Where(variant => owned.Length == 0 || owned.Contains(variant["id"]?.ToString()))
+                .SelectMany(variant => (variant["downloadables"] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
+                .Where(candidate => candidate["name"]?.ToString() == file["name"]?.ToString() && candidate["file_size"] != null)
+                .Select(candidate => candidate["file_size"]!).GroupBy(size => size.ToJsonString()).ToArray();
+            if (matches.Length == 1) file["size"] = matches[0].First().DeepClone();
+        }
+    }
+
+    private async Task<JsonObject> SelectFilesAsync(JsonObject item, JsonArray files)
+    {
+        await FillFileSizesAsync(item["id"]!.GetValue<string>(), files);
         foreach (var expired in selections.Where(pair => DateTimeOffset.UtcNow - pair.Value.Created > TimeSpan.FromMinutes(20)).Select(pair => pair.Key).ToArray()) selections.Remove(expired);
         var ticket = Guid.NewGuid().ToString("N");
         var sorted = new JsonArray(files.OfType<JsonObject>().OrderBy(FilePriority).Select(file => (JsonNode)file.DeepClone()).ToArray());
@@ -196,7 +228,7 @@ internal sealed class DownloadService : IDisposable
             item["image"]?.GetValue<string>() ?? "", item["shop"]?.GetValue<string>() ?? "");
         return new JsonObject { ["ticket"] = ticket, ["title"] = item["title"]!.DeepClone(), ["directory"] = downloadDirectory(),
             ["files"] = new JsonArray(sorted.Select(file => (JsonNode)new JsonObject { ["id"] = file!["id"]!.DeepClone(),
-                ["name"] = file["name"]!.DeepClone(), ["material"] = file["material"]?.DeepClone() }).ToArray()) };
+                ["name"] = file["name"]!.DeepClone(), ["material"] = file["material"]?.DeepClone(), ["size"] = file["size"]?.DeepClone() }).ToArray()) };
     }
 
     private static int FilePriority(JsonObject file)
@@ -231,6 +263,16 @@ internal sealed class DownloadService : IDisposable
         Emit();
         if (!working) _ = RunAsync();
         return files.Length;
+    }
+
+    internal string GetFolder(string id)
+    {
+        var record = history.OfType<JsonObject>().FirstOrDefault(record => record["id"]?.GetValue<string>() == id)
+            ?? throw new InvalidOperationException("下载记录不存在。");
+        var target = record["path"]?.GetValue<string>() ?? throw new InvalidOperationException("下载文件尚未保存。");
+        var directory = Path.GetDirectoryName(Path.GetFullPath(target))!;
+        if (!Directory.Exists(directory)) throw new DirectoryNotFoundException("下载目录已移动或删除。");
+        return directory;
     }
 
     internal bool Cancel(string id)
@@ -391,6 +433,7 @@ internal sealed class DownloadService : IDisposable
 
     public void Dispose()
     {
+        sizeClient.Dispose();
         currentCancellation?.Cancel();
         pending?.Operation?.CancelIfInProgress();
         listing?.Dispose();

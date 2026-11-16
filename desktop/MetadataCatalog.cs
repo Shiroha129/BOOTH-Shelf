@@ -54,6 +54,24 @@ internal sealed class MetadataCatalog : IDisposable
         };
     }
 
+    internal async Task<JsonObject> DetailAsync(string id, CancellationToken token)
+    {
+        if (!Regex.IsMatch(id, @"^\d{1,20}$")) throw new InvalidDataException("商品 ID 无效");
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"https://booth.pm/ja/items/{id}.json");
+        using var response = await requestsGate.RunAsync(() => access == null ? client.SendAsync(request, token) : access.SendAsync(client, request, token), token);
+        if (!response.IsSuccessStatusCode) throw new InvalidOperationException("商品页面暂时无法访问，请稍后重试。");
+        var data = JsonNode.Parse(await response.Content.ReadAsStringAsync(token))!.AsObject();
+        Normalize(data, id);
+        return new JsonObject
+        {
+            ["id"] = id, ["title"] = data["name"]?.DeepClone(), ["description"] = data["description"]?.DeepClone(),
+            ["images"] = new JsonArray((data["images"] as JsonArray ?? new JsonArray()).OfType<JsonObject>()
+                .Select(image => image["original"] ?? image["resized"]).Where(image => image != null).Select(image => image!.DeepClone()).ToArray()),
+            ["variations"] = new JsonArray((data["variations"] as JsonArray ?? new JsonArray()).OfType<JsonObject>()
+                .Select(variant => (JsonNode)new JsonObject { ["name"] = variant["name"]?.DeepClone(), ["price"] = variant["price"]?.DeepClone() }).ToArray())
+        };
+    }
+
     internal void Merge(JsonObject? snapshot)
     {
         if (snapshot?["items"] is not JsonArray items) return;

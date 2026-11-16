@@ -88,7 +88,7 @@ internal static class FeatureSelfTest
                         "Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n");
             };
         }
-        using var service = new DownloadService(root, () => Task.FromResult(environment), () => directory, CancellationToken.None, Configure);
+        using var service = new DownloadService(root, () => Task.FromResult(environment), () => directory, CancellationToken.None, Configure, sizeHandler: new MetadataHandler());
         var item = new JsonObject { ["id"] = "123", ["title"] = "测试商品", ["libraryUrl"] = ShelfWindow.LibraryUrl };
         var selection = await service.ListAsync(item);
         Check(selection["files"]!.AsArray().Count == 2 && selection["files"]![0]!["name"]!.GetValue<string>() == "one.zip", "文件名解析或商品隔离失败");
@@ -197,13 +197,16 @@ internal static class FeatureSelfTest
             globalThis.savedRequest = desktopRequest;
             globalThis.queuedFiles = null;
             desktopRequest = async (action,payload) => {
-              if (action === 'files') return {ticket:'test',directory:'C:\\Downloads\\BOOTH-Shelf',files:[{id:'101',name:'选中的衣装.zip'},{id:'102',name:'另一款式.zip'}]};
+              if (action === 'files') return {ticket:'test',directory:'C:\\Downloads\\BOOTH-Shelf',files:[{id:'101',name:'选中的衣装.zip',size:8388608},{id:'102',name:'另一款式.zip',size:1073741824}]};
+              if (action === 'product') return {id:payload.id,title:'Original item title',description:'Original description\n第二行原文',images:[],variations:[{name:'Full Set'},{name:'Milfy/Eku'},{name:'応援版'}]};
               if (action === 'downloads-start') { globalThis.queuedFiles = payload.ids; return payload.ids.length; }
               return savedRequest(action,payload);
             };
             openFiles(snapshot.items[0]);
             """);
         await Task.Delay(150);
+        Check(await view.ExecuteScriptAsync("[...document.querySelectorAll('.file-size')].map(size=>size.textContent).join(',') === '8.0 MB,1.0 GB' && getComputedStyle(document.querySelector('.file-size')).color === 'rgb(200, 50, 50)'") == "true", "文件大小预览或红色字体错误");
+        report["fileSizePreview"] = true;
         var modal = await view.ExecuteScriptAsync("""
             (() => {
               const inputs = [...element('file-list').querySelectorAll('input')];
@@ -217,7 +220,36 @@ internal static class FeatureSelfTest
         await Task.Delay(150);
         Check(modal == "true" && await view.ExecuteScriptAsync("queuedFiles?.join(',') === '101' && !element('file-dialog').open && !element('downloads-panel').hidden") == "true",
             "文件勾选窗口没有仅下载所选文件");
-        await view.ExecuteScriptAsync("desktopRequest = savedRequest; delete globalThis.savedRequest; showView('library');");
+        await view.ExecuteScriptAsync("""
+            snapshot.items[0].image = 'https://example.test/avatar.jpg';
+            localFiles = [{id:'native-local',itemId:'1',title:snapshot.items[0].title,name:'old.zip'}];
+            showView('local');
+            document.querySelector('#grid .cover').click();
+            element('local-download').click();
+            """);
+        await Task.Delay(150);
+        Check(await view.ExecuteScriptAsync("element('file-dialog').open && !element('local-dialog').open && fileSelection.files.length === 2 && element('file-product').textContent === snapshot.items[0].title") == "true", "本地详情未打开同一资产的补充下载");
+        report["additionalLocalDownloads"] = true;
+        Check(await view.ExecuteScriptAsync("""
+            (() => {
+              element('file-dialog').close();
+              showView('local');
+              document.querySelector('#grid .cover').click();
+              element('search').value = 'hidden asset';
+              element('local-show-library').click();
+              const card = document.querySelector('#grid .card[data-item-id="1"]');
+              return currentView === 'library' && !element('local-dialog').open && !element('search').value
+                && card.classList.contains('located-asset') && document.activeElement === card;
+            })()
+            """) == "true", "本地头像未清除筛选并定位到资料库资产");
+        report["localCoverLocation"] = true;
+        await view.ExecuteScriptAsync("document.querySelector('#grid .item-link').click();");
+        await Task.Delay(150);
+        Check(await view.ExecuteScriptAsync("element('product-dialog').open && !element('product-layout').hidden && element('product-title').textContent === 'Original item title' && element('product-description').textContent === 'Original description\\n第二行原文' && element('product-compatibility').textContent === 'MilfyEku'") == "true", "内置商品详情未保留原文字或排除全套、赞助选项");
+        using (var preview = File.Create(Path.Combine(Program.DataDirectory, "product-details-preview.png")))
+            await view.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, preview);
+        await view.ExecuteScriptAsync("element('product-dialog').close(); desktopRequest = savedRequest; delete globalThis.savedRequest; showView('library');");
+        report["embeddedProductDetails"] = true;
         report["fileDialogSelection"] = true;
         return report;
     }

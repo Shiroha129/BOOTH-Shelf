@@ -1,6 +1,6 @@
 const testFixture = {
   testing: true,
-  appUpdate: { status: "idle", currentVersion: "1.0.2" },
+  appUpdate: { status: "idle", currentVersion: "1.0.3" },
   systemLanguage: "zh-CN",
   settings: { currency: "CNY", downloadDirectory: "C:\\TestDownloads", rememberSession: true, pinnedTags: [], language: "auto", closeBehavior: "ask", updateNotifications: true, notificationIntervalMinutes: 60 },
   boothAccess: { paused: false },
@@ -13,6 +13,8 @@ const testFixture = {
     { id: "local2", itemId: "1", title: "测试衣装", name: "Outfit.zip", size: 2097152, path: "C:\\TestDownloads\\Outfit.zip", createdAt: "2026-11-09T10:00:00Z" }
   ],
   downloads: [],
+  product: { id: "1", title: "测试衣装", description: "原始商品简介\n第二段说明 <img src=x onerror=productInjected=true>", images: ["https://example.test/product-1.jpg", "https://example.test/product-2.jpg"],
+    variations: [{ name: "Full Set [20人]", price: 2000 }, { name: "Milfy/Eku - (ミルフィ/エク用)", price: 1000 }, { name: "Manuka - (マヌカ用)", price: 1000 }, { name: "応援版", price: 3000 }] },
   snapshot: {
     schemaVersion: 2, complete: true, syncedAt: "2026-11-09T10:00:00Z", spend: { totalJpy: 2700, orders: 2, complete: true },
     items: [
@@ -92,9 +94,10 @@ window.chrome.webview = {
           result = testFixture.settings.pinnedTags; break;
         }
         case "choose-directory": testFixture.settings.downloadDirectory = "D:\\ChangedFolder"; result = testFixture.settings; break;
+        case "product": result = { ...testFixture.product, id: payload.id, title: testFixture.snapshot.items.find(item => item.id === payload.id)?.title || testFixture.product.title }; break;
         case "files": result = { ticket: "fixture-ticket", directory: testFixture.settings.downloadDirectory, files: [
-          { id: "101", name: "Materials.zip", material: true }, { id: "103", name: "Outfit_Milfy.zip", material: false },
-          { id: "104", name: "Outfit_エク.zip", material: false }, { id: "102", name: "Outfit.zip", material: false }
+          { id: "101", name: "Materials.zip", material: true, size: 8388608 }, { id: "103", name: "Outfit_Milfy.zip", material: false, size: "1.2 GB" },
+          { id: "104", name: "Outfit_エク.zip", material: false, size: "512 KB" }, { id: "102", name: "Outfit.zip", material: false }
         ].concat(scrollFixture ? Array.from({ length: 30 }, (_, index) => ({ id: String(index + 105), name: "Outfit_" + (index + 1) + ".zip", material: false })) : []) }; break;
         case "downloads-start": result = payload.ids.length; break;
         case "local-list": case "local-action": result = testFixture.localFiles; break;

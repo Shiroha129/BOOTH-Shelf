@@ -136,10 +136,10 @@ internal sealed partial class ShelfWindow
         return (JsonObject)preferences.DeepClone();
     }
 
-    private bool OpenDownloadFolder()
+    private bool OpenDownloadFolder(string? id = null)
     {
-        var path = preferences["downloadDirectory"]!.GetValue<string>();
-        Directory.CreateDirectory(path);
+        var path = id == null ? preferences["downloadDirectory"]!.GetValue<string>() : downloads.GetFolder(id);
+        if (id == null) Directory.CreateDirectory(path);
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
         return true;
     }
