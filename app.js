@@ -312,9 +312,12 @@ function render() {
     link.href = safeURL(item.url);
     card.querySelector(".item-id").textContent = "#" + item.id;
     if (currentView === "library" && downloaded.has(item.id)) {
-      const badge = document.createElement("span");
+      const badge = document.createElement("button");
+      badge.type = "button";
       badge.className = "downloaded-badge";
       badge.textContent = t("已下载");
+      badge.title = t("在本地库中定位");
+      badge.onclick = () => locateLibraryItem(item.id, "local");
       card.querySelector(".item-id").after(badge);
     }
     card.querySelector(".card-price").textContent = priceText(item);

@@ -198,7 +198,7 @@ internal static class FeatureSelfTest
             globalThis.queuedFiles = null;
             desktopRequest = async (action,payload) => {
               if (action === 'files') return {ticket:'test',directory:'C:\\Downloads\\BOOTH-Shelf',files:[{id:'101',name:'选中的衣装.zip',size:8388608},{id:'102',name:'另一款式.zip',size:1073741824}]};
-              if (action === 'product') return {id:payload.id,title:'Original item title',description:'Original description\n第二行原文',images:[],variations:[{name:'Full Set'},{name:'Milfy/Eku'},{name:'応援版'}]};
+              if (action === 'product') return {id:payload.id,title:'Original item title',description:'Original description\n第二行原文',images:[],variations:[{name:'Full Set [-30%OFF]'},{name:'Milfy/Eku - (ミルフィ/エク用) [-25%OFF]'},{name:'応援版'}]};
               if (action === 'downloads-start') { globalThis.queuedFiles = payload.ids; return payload.ids.length; }
               return savedRequest(action,payload);
             };
@@ -246,27 +246,33 @@ internal static class FeatureSelfTest
         await view.ExecuteScriptAsync("""
             document.querySelector('#grid .card').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:500,clientY:300}));
             """);
-        Check(await view.ExecuteScriptAsync("!element('asset-menu').hidden && element('asset-web').textContent === '跳转网页' && !element('asset-copy').hidden && element('asset-library').hidden && element('asset-delete').hidden && element('asset-web').target === '_blank'") == "true", "资料库右键菜单内容或外部网页链接错误");
+        Check(await view.ExecuteScriptAsync("!element('asset-menu').hidden && element('asset-web').textContent === '跳转网页' && !element('asset-copy').hidden && element('asset-library').hidden && element('asset-folder').hidden && element('asset-delete').hidden && element('asset-web').target === '_blank'") == "true", "资料库右键菜单内容或外部网页链接错误");
         var previousClipboard = Clipboard.GetDataObject();
         try
         {
             await view.ExecuteScriptAsync("element('asset-copy').click();");
             await Task.Delay(150);
             Check(Clipboard.ContainsText() && Clipboard.GetText() == "https://booth.pm/ja/items/1", "商品链接未复制到系统剪贴板");
+            await ImageClipboardAsync(view);
         }
         finally { if (previousClipboard != null) Clipboard.SetDataObject(previousClipboard, true); else Clipboard.Clear(); }
         report["libraryContextMenu"] = true;
         report["productUrlClipboard"] = true;
+        report["productImageClipboard"] = true;
         await view.ExecuteScriptAsync("element('download-state-filter').value = 'downloaded'; element('download-state-filter').dispatchEvent(new Event('change'));");
         Check(await view.ExecuteScriptAsync("document.querySelectorAll('#grid .card').length === 1 && document.querySelector('#grid .downloaded-badge').textContent === '已下载'") == "true", "已下载标记或筛选错误");
         await view.ExecuteScriptAsync("element('download-state-filter').value = 'not-downloaded'; element('download-state-filter').dispatchEvent(new Event('change'));");
         Check(await view.ExecuteScriptAsync("!document.querySelector('#grid .card[data-item-id=\"1\"]') && document.querySelector('#grid .card[data-item-id=\"2\"]') !== null") == "true", "未下载筛选未排除本地资产");
         await view.ExecuteScriptAsync("element('clear-filters').click(); showView('local'); document.querySelector('#grid .card').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:500,clientY:300}));");
-        Check(await view.ExecuteScriptAsync("!element('asset-library').hidden && element('asset-copy').hidden && !element('asset-delete').hidden") == "true", "本地菜单未保留删除或添加资料库跳转");
+        Check(await view.ExecuteScriptAsync("!element('asset-library').hidden && element('asset-copy').hidden && !element('asset-folder').hidden && element('asset-folder').textContent === '打开文件目录' && !element('asset-delete').hidden") == "true", "本地菜单未保留删除、资料库跳转或文件目录操作");
         await view.ExecuteScriptAsync("element('asset-library').click();");
         Check(await view.ExecuteScriptAsync("currentView === 'library' && document.querySelector('#grid .card[data-item-id=\"1\"]').classList.contains('located-asset')") == "true", "本地右键菜单未定位到资料库");
+        await view.ExecuteScriptAsync("document.querySelector('#grid .downloaded-badge').click();");
+        Check(await view.ExecuteScriptAsync("currentView === 'local' && document.querySelector('#grid .card[data-item-id=\"1\"]').classList.contains('located-asset') && !element('local-dialog').open") == "true", "已下载标记未定位到本地库");
+        await view.ExecuteScriptAsync("locateLibraryItem('1');");
         report["downloadStateFiltering"] = true;
         report["localMenuLibraryLocation"] = true;
+        report["downloadedBadgeLocalLocation"] = true;
         await view.ExecuteScriptAsync("document.querySelector('#grid .item-link').click();");
         await Task.Delay(150);
         Check(await view.ExecuteScriptAsync("element('product-dialog').open && !element('product-layout').hidden && element('product-title').textContent === 'Original item title' && element('product-description').textContent === 'Original description\\n第二行原文' && element('product-compatibility').textContent === 'MilfyEku'") == "true", "内置商品详情未保留原文字或排除全套、赞助选项");
@@ -276,5 +282,44 @@ internal static class FeatureSelfTest
         report["embeddedProductDetails"] = true;
         report["fileDialogSelection"] = true;
         return report;
+    }
+
+    private static async Task ImageClipboardAsync(WebView2 view)
+    {
+        using var source = new Bitmap(2, 1);
+        source.SetPixel(0, 0, Color.Red);
+        source.SetPixel(1, 0, Color.Transparent);
+        using var png = new MemoryStream();
+        source.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+        await ShelfWindow.CopyImageToClipboardAsync(view.CoreWebView2, png.ToArray(), ".png");
+        using (var copied = Clipboard.GetImage())
+            Check(copied?.Width == 2 && copied.Height == 1, "剪贴板中没有实际图片或原始尺寸错误");
+        using (var transparent = Clipboard.GetData("PNG") as MemoryStream)
+        {
+            Check(transparent != null, "剪贴板缺少 PNG 图片内容");
+            using var image = new Bitmap(transparent!);
+            Check(image.GetPixel(0, 0).ToArgb() == Color.Red.ToArgb() && image.GetPixel(1, 0).A == 0, "复制图片的颜色或透明度丢失");
+        }
+        var webp = JsonNode.Parse(await view.ExecuteScriptAsync("""
+            (() => {
+              const canvas = document.createElement('canvas');
+              canvas.width = 2; canvas.height = 1;
+              const context = canvas.getContext('2d');
+              context.fillStyle = '#00ff00'; context.fillRect(0, 0, 2, 1);
+              return canvas.toDataURL('image/webp', 1).split(',')[1];
+            })()
+            """))!.GetValue<string>();
+        await ShelfWindow.CopyImageToClipboardAsync(view.CoreWebView2, Convert.FromBase64String(webp), ".webp");
+        using (var copied = Clipboard.GetImage())
+        {
+            Check(copied?.Width == 2 && copied.Height == 1, "WebP 图片未复制为可粘贴的图片");
+            using var bitmap = new Bitmap(copied!);
+            Check(bitmap.GetPixel(0, 0).G > 240 && bitmap.GetPixel(0, 0).R < 10, "WebP 图片复制后的像素错误");
+        }
+        var rejected = false;
+        try { await ShelfWindow.CopyImageToClipboardAsync(view.CoreWebView2, [1, 2, 3], ".png"); }
+        catch (InvalidOperationException) { rejected = true; }
+        using var retained = Clipboard.GetImage();
+        Check(rejected && retained?.Width == 2, "损坏图片覆盖了剪贴板或未报告失败");
     }
 }

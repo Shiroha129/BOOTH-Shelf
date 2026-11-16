@@ -240,6 +240,7 @@ internal sealed partial class ShelfWindow : Form
                 "product" => await metadata.DetailAsync(message["payload"]?["id"]?.GetValue<string>() ?? "", lifetime.Token),
                 "copy-product-url" => CopyProductUrl(message["payload"]?["id"]?.GetValue<string>() ?? ""),
                 "save-product-image" => await SaveProductImageAsync(message["payload"]),
+                "copy-product-image" => await CopyProductImageAsync(message["payload"]),
                 "downloads-start" => downloads.Enqueue(message["payload"]?["ticket"]?.GetValue<string>() ?? "",
                     message["payload"]?["ids"]?.AsArray().Select(id => id!.GetValue<string>()).ToArray() ?? []),
                 "downloads-cancel" => downloads.Cancel(message["payload"]?["id"]?.GetValue<string>() ?? ""),

@@ -29,15 +29,24 @@ function openProductImageMenu(event, url, number) {
 }
 
 function productCompatibility(data) {
-  const text = value => String(value || "").normalize("NFKC").trim();
+  const text = value => String(value || "").normalize("NFKC")
+    .replace(/\[([^\]]*)\]|\(([^)]*)\)|【([^】]*)】/g, (label, square, round, wide) =>
+      /^(?:[-−–—]?\s*\d+(?:\.\d+)?\s*(?:%\s*(?:OFF\b|オフ|割引)|割引)|(?:SALE|NEW|LIMITED|PC|Quest)\b|期間限定|セール|特価|発売記念|新作|新発売|限时|限時|[¥$€£]\s*\d)/i.test((square ?? round ?? wide).trim()) ? "" : label)
+    .replace(/[-−–—]?\s*\d+(?:\.\d+)?\s*(?:%\s*(?:OFF\b|オフ|割引)|割引)(?:中)?/gi, "")
+    .replace(/(?:[¥$€£]\s*\d[\d,]*(?:\.\d+)?|\d[\d,]*(?:\.\d+)?\s*(?:円|元|JPY\b|USD\b))/gi, "")
+    .replace(/\b(?:ver(?:sion)?\.?|v)\s*\d+(?:\.\d+)*\b/gi, "")
+    .replace(/\b(?:on\s+sale|sale)\b|期間限定(?:セール)?|セール|限时(?:优惠|折扣)|限時(?:優惠|折扣)/gi, "")
+    .replace(/\[\s*\]|\(\s*\)|【\s*】/g, "").trim();
   const bundle = /\b(?:full|all|complete)[\s_-]*(?:set|pack|avatars?|models?|edition|version|bundle|collection)(?:\b|_)|\ball[\s_-]*in[\s_-]*one\b|\bbundle\b|^(?:full|all|complete|フル)$|フル(?:セット|パック|バージョン|版)|コンプリート|全(?:\d+\s*)?(?:種類?|種|体|人|モデル|アバター|対応|部|て|套(?:装|裝)?)|まとめ(?:買い|セット)|一括|お得(?:な)?セット/i;
   const support = /\b(?:boost|support(?:er|ing)?|sponsor(?:ship)?|donation|tip)\b|応援|支援|お布施|投げ銭|寄付|赞助|贊助|후원/i;
   const generic = /^(?:(?:通常|普通|標準|标准|有料|無料|無償|有償|下载|下載|ダウンロード)(?:版)?|(?:normal|standard|regular|download)(?:\s+(?:edition|version))?|商品|本体|データ|data|衣装|衣裝|outfit|texture|テクスチャ|unitypackage|fbx|vrchat|\d+\s*(?:アバター|モデル|avatars?|models?|人|体|種)|[\d.,]+\s*(?:円|元|yen)|s|m|l|xl|xxl|black|white|red|blue|pink|黒|白|赤|青)$/i;
   const excluded = value => bundle.test(text(value)) || support.test(text(value)) || generic.test(text(value));
-  const split = value => text(value).replace(/\s*[-–—]\s*\([^)]*\)\s*$/, "")
+  const split = value => text(value)
+    .replace(/([^\s/|,、&+\[【(])\s*[-–—]?\s*(?:\([^)]*\)|\[[^\]]*\]|【[^】]*】)/g, "$1")
+    .replace(/[\[\]【】()]/g, "")
     .replace(/^(?:for\s+|対応アバター\s*[:：]\s*)/i, "")
-    .split(/[\/|,、&+]/).map(name => name.trim().replace(/^[・●〇○■\-—\s]+/, "")
-      .replace(/\s*(?:向け|専用|対応(?:版)?|用(?:版)?|版)$/, "").trim())
+    .split(/[\/|,、&+]/).map(name => name.trim().replace(/^[・●〇○■\-–—\s]+|[\-–—\s]+$/g, "")
+      .replace(/\s*(?:向け|専用(?:版)?|対応(?:版)?|用(?:版)?|版)$/, "").trim())
     .filter(name => name && !excluded(name) && text(name) !== text(data.title));
   const unique = values => {
     const seen = new Set();
@@ -156,12 +165,22 @@ element("product-save-image").onclick = () => run(async () => {
   closeProductImageMenu();
   if (target && await desktopRequest("save-product-image", target)) notify(t("图片已保存"), false, true);
 });
+element("product-copy-image").onclick = () => run(async () => {
+  const target = productImageMenuTarget;
+  closeProductImageMenu();
+  if (target && await desktopRequest("copy-product-image", target)) notify(t("图片已复制"), false, true);
+});
 document.addEventListener("pointerdown", event => { if (!event.target.closest("#product-image-menu")) closeProductImageMenu(); });
 document.addEventListener("keydown", event => {
   if (element("product-image-menu").hidden) return;
   if (event.key === "Escape") { event.preventDefault(); closeProductImageMenu(true); }
   if (event.key === "Tab") closeProductImageMenu();
-  if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) { event.preventDefault(); element("product-save-image").focus(); }
+  if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+    event.preventDefault();
+    const controls = [...element("product-image-menu").querySelectorAll("[role=menuitem]")];
+    const index = controls.indexOf(document.activeElement);
+    controls[event.key === "Home" ? 0 : event.key === "End" ? controls.length - 1 : (index + (event.key === "ArrowUp" ? -1 : 1) + controls.length) % controls.length].focus();
+  }
 });
 window.addEventListener("scroll", () => closeProductImageMenu(), true);
 window.addEventListener("resize", () => closeProductImageMenu());

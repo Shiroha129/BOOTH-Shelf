@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Microsoft.Web.WebView2.Core;
 
 namespace BoothShelf;
 
@@ -175,6 +177,60 @@ internal sealed partial class ShelfWindow
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
         return true;
+    }
+
+    private async Task<bool> CopyProductImageAsync(JsonNode? payload)
+    {
+        var image = await metadata.ImageAsync(payload?["url"]?.GetValue<string>() ?? "", lifetime.Token);
+        await CopyImageToClipboardAsync(view.CoreWebView2, image.Data, image.Extension);
+        return true;
+    }
+
+    internal static async Task CopyImageToClipboardAsync(CoreWebView2 browser, byte[] bytes, string extension)
+    {
+        try
+        {
+            // WebView2 decodes the web image formats that GDI+ cannot read.
+            if (extension is ".webp" or ".avif")
+            {
+                var source = JsonSerializer.Serialize("data:image/" + extension[1..] + ";base64," + Convert.ToBase64String(bytes));
+                var result = JsonNode.Parse(await browser.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new
+                {
+                    expression = $$"""
+                        (async () => {
+                          const image = new Image();
+                          image.src = {{source}};
+                          await image.decode();
+                          if (!image.naturalWidth || image.naturalWidth * image.naturalHeight > 64 * 1024 * 1024) throw new Error('Image size');
+                          const canvas = document.createElement('canvas');
+                          canvas.width = image.naturalWidth;
+                          canvas.height = image.naturalHeight;
+                          canvas.getContext('2d').drawImage(image, 0, 0);
+                          return canvas.toDataURL('image/png').split(',')[1];
+                        })()
+                        """,
+                    awaitPromise = true,
+                    returnByValue = true
+                })).WaitAsync(TimeSpan.FromSeconds(30)));
+                var encoded = result?["result"]?["value"]?.GetValue<string>();
+                if (string.IsNullOrEmpty(encoded) || encoded.Length > 70 * 1024 * 1024) throw new InvalidDataException();
+                bytes = Convert.FromBase64String(encoded);
+            }
+            using var input = new MemoryStream(bytes);
+            using var bitmap = new Bitmap(input);
+            if ((long)bitmap.Width * bitmap.Height > 64 * 1024 * 1024) throw new InvalidDataException();
+            using var png = new MemoryStream();
+            bitmap.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+            png.Position = 0;
+            var clipboard = new DataObject();
+            clipboard.SetImage(bitmap);
+            clipboard.SetData("PNG", false, png);
+            Clipboard.SetDataObject(clipboard, true, 5, 100);
+        }
+        catch (Exception error)
+        {
+            throw new InvalidOperationException("图片复制失败，请稍后重试。", error);
+        }
     }
 
     private JsonArray LocalAction(JsonNode? payload)

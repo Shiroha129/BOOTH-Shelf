@@ -156,6 +156,7 @@ function openAssetMenu(event, item, card) {
   element("asset-web").href = "https://booth.pm/ja/items/" + item.id;
   element("asset-copy").hidden = currentView !== "library";
   element("asset-library").hidden = currentView !== "local";
+  element("asset-folder").hidden = currentView !== "local";
   element("asset-delete").hidden = currentView !== "local";
   const menu = element("asset-menu");
   menu.hidden = false;
@@ -178,6 +179,11 @@ element("asset-library").onclick = () => {
   closeAssetMenu();
   if (item && !locateLibraryItem(item.id)) notify(t("请先同步该资产，再定位到资料库。"), true);
 };
+element("asset-folder").onclick = () => run(async () => {
+  const file = localFiles.find(file => file.itemId === assetMenuItem?.id);
+  closeAssetMenu();
+  if (file) await desktopRequest("local-action", { id: file.id, action: "folder" });
+});
 element("asset-delete").onclick = () => run(async () => {
   const item = assetMenuItem;
   closeAssetMenu();
@@ -366,12 +372,12 @@ element("local-download").onclick = () => {
   element("local-dialog").close();
   openFiles(item);
 };
-function locateLibraryItem(id) {
+function locateLibraryItem(id, view = "library") {
   const item = itemIndex.get(id);
-  if (!item) return false;
+  if (!item || (view === "local" && !localFiles.some(file => file.itemId === id))) return false;
   if (element("local-dialog").open) element("local-dialog").close();
-  if (!itemSections(item).includes(activeSection)) activeSection = itemSections(item).find(section => ["bought", "gift", "free"].includes(section));
-  showView("library");
+  if (view === "library" && !itemSections(item).includes(activeSection)) activeSection = itemSections(item).find(section => ["bought", "gift", "free"].includes(section));
+  showView(view);
   element("clear-filters").click();
   const index = filteredItems(sourceItems()).findIndex(candidate => candidate.id === item.id);
   displayPage = Math.floor(index / pageSize) + 1;

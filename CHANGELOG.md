@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.5 — 2026-11-17
+
+### 中文
+
+- 商品大图和缩略图右键新增“复制图片”。
+- 本地库资产右键新增“打开文件目录”。
+- 点击资料库的“已下载”可定位到本地库对应资产。
+- 适配型号清除折扣、价格、版本和附加说明，仅显示模型名称。
+
+### 日本語
+
+- 商品の大きな画像・サムネイルの右クリックに「画像をコピー」を追加。
+- ローカルアセットの右クリックに「保存先フォルダーを開く」を追加。
+- ライブラリの「ダウンロード済み」を押すと、ローカルの該当アセットを表示。
+- 対応アバターから割引・価格・バージョン・補足説明を除き、モデル名だけを表示。
+
+### English
+
+- Add “Copy image” to the main image and thumbnail context menus.
+- Add “Open file location” to the local asset context menu.
+- Click “Downloaded” in the library to locate the corresponding local asset.
+- Remove discounts, prices, versions and extra notes from supported avatar names.
+
 ## 1.0.4 — 2026-11-16
 
 ### 中文
