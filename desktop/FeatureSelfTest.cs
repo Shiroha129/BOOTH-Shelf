@@ -102,6 +102,7 @@ internal static class FeatureSelfTest
         Check(service.History[0]!["state"]!.GetValue<string>() == "completed", "文件传输未完成：" + service.History.ToJsonString());
         Check(service.History[0]!["fileId"]?.GetValue<string>() == "102", "下载记录未保留 BOOTH 文件标识");
         var firstPath = service.History[0]!["path"]!.GetValue<string>();
+        var original = service.History[0]!.AsObject();
         Check(File.ReadAllText(firstPath).EndsWith("/102") && Path.GetFileName(firstPath) == "two.zip" && !File.Exists(firstPath + ".part")
             && fetched.SequenceEqual(new[] { "/downloadables/102" }), "选择下载或完成重命名失败");
         service.Enqueue(ticket, ["102"]);
@@ -112,6 +113,27 @@ internal static class FeatureSelfTest
         await WaitDownloadsAsync(service);
         Check(service.History[0]!["path"]!.GetValue<string>().StartsWith(directory + Path.DirectorySeparatorChar)
             && service.History[0]!["state"]!.GetValue<string>() == "completed", "目录更改未生效");
+        var local = new LocalLibrary(root, service.History);
+        service.Completed += record => local.Add(record);
+        item["title"] = "商品改名后";
+        item["files"] = new JsonArray(new JsonObject { ["id"] = "999", ["name"] = "two.zip", ["size"] = 1 });
+        var refreshed = await service.ListAsync(item, refresh: true);
+        Check(refreshed["files"]!.AsArray().Any(file => file?["id"]?.GetValue<string>() == "102")
+            && refreshed["files"]!.AsArray().All(file => file?["id"]?.GetValue<string>() != "999"), "更新下载使用了过期缓存");
+        var fetchedBeforeUpdate = fetched.Count;
+        var updateTicket = refreshed["ticket"]!.GetValue<string>();
+        Check(service.EnqueueUpdate(updateTicket, ["two.zip", "two.zip"], original) == 1, "更新通知重复选择同一文件");
+        rejected = false;
+        try { service.EnqueueUpdate(updateTicket, ["two.zip"], original); } catch (InvalidOperationException) { rejected = true; }
+        Check(rejected, "更新下载允许重复排队");
+        await WaitDownloadsAsync(service);
+        var updated = service.History[0]!;
+        Check(updated["state"]!.GetValue<string>() == "completed" && Path.GetDirectoryName(updated["path"]!.GetValue<string>()) == Path.GetDirectoryName(firstPath)
+            && updated["title"]!.GetValue<string>() == original["title"]!.GetValue<string>()
+            && File.ReadAllText(firstPath).EndsWith("/102") && updated["path"]!.GetValue<string>() != firstPath, "更新未保存到原资产目录或覆盖了原文件");
+        Check(fetched.Skip(fetchedBeforeUpdate).SequenceEqual(new[] { "/downloadables/102" })
+            && local.List("123").Any(file => file?["id"]?.GetValue<string>() == updated["id"]!.GetValue<string>())
+            && local.AssetDirectories("123").Contains(Path.GetDirectoryName(firstPath)), "更新文件选择或本地库登记失败");
         service.Enqueue(ticket, ["101", "102"]);
         var queuedId = service.History[0]!["id"]!.GetValue<string>();
         service.Cancel(queuedId);
@@ -128,14 +150,15 @@ internal static class FeatureSelfTest
             && !File.Exists(service.History[0]!["path"]!.GetValue<string>()), "拒绝下载未正确失败或写出假文件");
         loggedOut = true;
         rejected = false;
-        try { await service.ListAsync(item); } catch (InvalidOperationException error) { rejected = error.Message.Contains("登录"); }
+        try { await service.ListAsync(item, refresh: true); } catch (InvalidOperationException error) { rejected = error.Message.Contains("登录"); }
         Check(rejected, "登录过期未拦截");
         Check(!File.ReadAllText(Path.Combine(root, "downloads.json")).Contains("downloadables"), "历史记录保存了下载地址");
         Check(DownloadService.SafeName("../CON?.zip").IndexOfAny(Path.GetInvalidFileNameChars()) < 0
             && DownloadService.SafeName("CON.zip") == "_CON.zip", "文件名净化失败");
         return new JsonObject { ["fileSelection"] = true, ["authenticatedListing"] = true, ["webViewDownload"] = true,
             ["noOverwrite"] = true, ["directoryChange"] = true, ["expiredLogin"] = true, ["safeFilename"] = true,
-            ["cancelQueuedAndActive"] = true, ["downloadFailure"] = true };
+            ["cancelQueuedAndActive"] = true, ["downloadFailure"] = true, ["updateFreshFiles"] = true,
+            ["updateOriginalDirectory"] = true, ["updateNoDuplicates"] = true, ["updateLocalLibrary"] = true };
     }
 
     private static async Task WaitDownloadsAsync(DownloadService service)

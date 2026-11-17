@@ -131,13 +131,13 @@ internal sealed class DownloadService : IDisposable
         return path;
     }
 
-    internal async Task<JsonObject> ListAsync(JsonObject item)
+    internal async Task<JsonObject> ListAsync(JsonObject item, bool refresh = false)
     {
         await listingLock.WaitAsync(lifetime);
         try
         {
             var id = item["id"]!.GetValue<string>();
-            if (item["files"] is JsonArray { Count: > 0 } cachedFiles)
+            if (!refresh && item["files"] is JsonArray { Count: > 0 } cachedFiles)
             {
                 var available = new JsonArray(cachedFiles.OfType<JsonObject>().Select(file =>
                 {
@@ -238,20 +238,55 @@ internal sealed class DownloadService : IDisposable
         return Regex.IsMatch(name, "milfy|ミルフィ|みるふぃ|エク|えく|eku", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ? 1 : 2;
     }
 
-    internal int Enqueue(string ticket, string[] fileIds)
+    private Selection GetSelection(string ticket)
     {
         if (!selections.TryGetValue(ticket, out var selection) || DateTimeOffset.UtcNow - selection.Created > TimeSpan.FromMinutes(20))
             throw new InvalidOperationException("文件列表已过期，请重新打开下载窗口。");
+        return selection;
+    }
+
+    internal int EnqueueUpdate(string ticket, string[] names, JsonObject localFile)
+    {
+        access?.ThrowIfPaused();
+        var selection = GetSelection(ticket);
+        if (HasActiveItem(selection.ItemId)) throw new InvalidOperationException("该资产正在下载，请在下载页查看。");
+        var ids = names.Distinct().Select(name =>
+        {
+            var matches = selection.Files.OfType<JsonObject>().Where(file => file["name"]?.GetValue<string>() == name)
+                .Select(file => file["id"]!.GetValue<string>()).Distinct().ToArray();
+            if (matches.Length != 1) throw new InvalidOperationException("更新文件已变化，请刷新资料库后重试。");
+            return matches[0];
+        }).ToArray();
+        return Enqueue(ticket, ids, localFile);
+    }
+
+    internal int Enqueue(string ticket, string[] fileIds, JsonObject? localFile = null)
+    {
+        var selection = GetSelection(ticket);
         var chosen = fileIds.Distinct().ToArray();
         if (chosen.Length == 0) throw new InvalidOperationException("请先选择要下载的文件。");
         var files = chosen.Select(id => selection.Files.FirstOrDefault(file => file?["id"]?.GetValue<string>() == id)
             ?? throw new InvalidDataException("文件不在当前商品的可下载列表中。")).ToArray();
-        var directory = Path.GetFullPath(downloadDirectory());
+        var title = selection.Title;
+        string directory;
+        if (localFile == null) directory = Path.GetFullPath(downloadDirectory());
+        else
+        {
+            if (localFile["itemId"]?.GetValue<string>() != selection.ItemId)
+                throw new InvalidOperationException("无法确认资产文件夹，请使用打开所在目录手动处理。");
+            var target = localFile["path"]?.GetValue<string>();
+            if (!File.Exists(target)) throw new FileNotFoundException("该资产没有可用的本地文件");
+            var assetDirectory = Path.GetDirectoryName(Path.GetFullPath(target!))!;
+            title = localFile["title"]?.GetValue<string>() ?? "";
+            if (string.IsNullOrWhiteSpace(title) || !string.Equals(Path.GetFileName(assetDirectory), SafeName(selection.ItemId + "_" + title), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("无法确认资产文件夹，请使用打开所在目录手动处理。");
+            directory = Path.GetDirectoryName(assetDirectory)!;
+        }
         foreach (var file in files)
         {
             var record = new JsonObject
             {
-                ["id"] = Guid.NewGuid().ToString("N"), ["itemId"] = selection.ItemId, ["title"] = selection.Title,
+                ["id"] = Guid.NewGuid().ToString("N"), ["itemId"] = selection.ItemId, ["title"] = title,
                 ["fileId"] = file["id"]!.DeepClone(),
                 ["image"] = selection.Image, ["shop"] = selection.Shop,
                 ["name"] = file["name"]!.DeepClone(), ["state"] = "queued", ["bytes"] = 0L,

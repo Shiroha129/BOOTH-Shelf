@@ -24,6 +24,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .notification-card.read { border-left-color: var(--line); }
 .notification-card h2 { font-size: 16px; margin: 0 0 10px; }
 .notification-card ul { padding-left: 20px; line-height: 1.8; overflow-wrap: anywhere; max-height: 220px; overflow-y: auto; font-size: 13px; }
+.notification-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .brand-icon { display: grid; place-items: center; width: 35px; height: 35px; border-radius: 11px; background: var(--accent); color: white; font-size: 23px; position: relative; }
 .brand-icon span { position: absolute; right: 4px; bottom: 2px; color: #ffd7c8; }
 .main-nav { margin-top: 48px; display: grid; gap: 9px; }

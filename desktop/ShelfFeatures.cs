@@ -256,7 +256,7 @@ internal sealed partial class ShelfWindow
         return localLibrary.List();
     }
 
-    private async Task<JsonObject> ListFilesAsync(string id)
+    private async Task<JsonObject> ListFilesAsync(string id, bool refresh = false)
     {
         if (!Regex.IsMatch(id, @"^\d{1,20}$")) throw new InvalidDataException("商品 ID 无效");
         var state = await LoadStateAsync();
@@ -266,7 +266,7 @@ internal sealed partial class ShelfWindow
         var sections = item["sections"] as JsonArray ?? new JsonArray(item["section"]?.GetValue<string>() ?? "bought");
         if (!sections.Any(section => section?.GetValue<string>() is "bought" or "gift"))
             throw new InvalidOperationException("免费栏仅展示商品，请在商品页面下载。");
-        return await downloads.ListAsync(item);
+        return await downloads.ListAsync(item, refresh);
     }
 
     private Task<object> CheckAuthAsync()

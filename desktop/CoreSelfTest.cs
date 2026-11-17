@@ -253,8 +253,38 @@ internal static class CoreSelfTest
         var rejected = false;
         try { service.Enqueue(selection["ticket"]!.GetValue<string>(), ["999"]); } catch (InvalidDataException) { rejected = true; }
         Check(rejected && service.History.Count == 0, "允许未选文件加入下载");
+        var folder = Path.Combine(root, DownloadService.SafeName("1_" + item["title"]!.GetValue<string>()));
+        Directory.CreateDirectory(folder);
+        var localPath = Path.Combine(folder, "Materials.zip");
+        File.WriteAllText(localPath, "original");
+        var local = new JsonObject { ["itemId"] = "1", ["title"] = item["title"]!.DeepClone(), ["path"] = localPath };
+        void RejectUpdate(string ticket, string[] names, JsonObject destination)
+        {
+            var failed = false;
+            try { service.EnqueueUpdate(ticket, names, destination); }
+            catch (Exception error) when (error is InvalidOperationException or InvalidDataException or FileNotFoundException) { failed = true; }
+            Check(failed && service.History.Count == 0, "无效更新通知加入了下载队列");
+        }
+        var validTicket = selection["ticket"]!.GetValue<string>();
+        RejectUpdate("missing", ["Materials.zip"], local);
+        RejectUpdate(validTicket, [], local);
+        RejectUpdate(validTicket, ["Materials.zip", "missing.zip"], local);
+        RejectUpdate(validTicket, ["Materials"], local);
+        var wrongAsset = (JsonObject)local.DeepClone();
+        wrongAsset["itemId"] = "2";
+        RejectUpdate(validTicket, ["Materials.zip"], wrongAsset);
+        wrongAsset = (JsonObject)local.DeepClone();
+        wrongAsset["title"] = "Wrong folder";
+        RejectUpdate(validTicket, ["Materials.zip"], wrongAsset);
+        File.Delete(localPath);
+        RejectUpdate(validTicket, ["Materials.zip"], local);
+        File.WriteAllText(localPath, "original");
+        item["files"]!.AsArray().Add(new JsonObject { ["id"] = "112", ["name"] = "Materials.zip" });
+        var ambiguous = await service.ListAsync(item);
+        RejectUpdate(ambiguous["ticket"]!.GetValue<string>(), ["Materials.zip"], local);
         return new JsonObject { ["cachedFileList"] = true, ["materialFirst"] = true, ["preferredNamesAfterMaterials"] = true,
-            ["stableFileOrder"] = true, ["noExtraMaterialFlags"] = true, ["selectionValidated"] = true };
+            ["stableFileOrder"] = true, ["noExtraMaterialFlags"] = true, ["selectionValidated"] = true,
+            ["updateNamesValidated"] = true, ["updateDestinationValidated"] = true };
     }
 
     private static async Task<JsonObject> ProductDetailsAsync(string root)

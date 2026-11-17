@@ -1,5 +1,6 @@
 let notificationState = { items: [] };
 let notificationPage = 1;
+const notificationDownloads = new Set();
 function renderNotifications() {
   const all = notificationState.items || [];
   const unread = all.filter(item => !item.read).length;
@@ -27,12 +28,28 @@ function renderNotifications() {
     meta.textContent = t("文件更新") + " · " + new Date(notice.createdAt).toLocaleString(I18n.locale);
     const files = document.createElement("ul");
     for (const name of notice.files || []) { const file = document.createElement("li"); file.textContent = name; files.append(file); }
+    const actions = document.createElement("div");
+    actions.className = "notification-actions";
+    const download = document.createElement("button");
+    download.className = "primary notification-download";
+    download.disabled = notificationDownloads.has(notice.itemId);
+    download.textContent = t(download.disabled ? "准备下载…" : "↓ 下载");
+    download.onclick = () => run(async () => {
+      if (notificationDownloads.has(notice.itemId)) return;
+      notificationDownloads.add(notice.itemId);
+      renderNotifications();
+      try {
+        await desktopRequest("updates-download", { id: notice.id });
+        showView("downloads");
+      } finally { notificationDownloads.delete(notice.itemId); renderNotifications(); }
+    });
     const read = document.createElement("button");
     read.className = "secondary";
     read.textContent = t(notice.read ? "已读" : "标记已读");
     read.disabled = notice.read;
     read.onclick = () => run(async () => { notificationState = await desktopRequest("updates-read", { id: notice.id }); renderNotifications(); });
-    card.append(title, meta, files, read);
+    actions.append(download, read);
+    card.append(title, meta, files, actions);
     fragment.append(card);
   }
   element("notification-list").replaceChildren(fragment);

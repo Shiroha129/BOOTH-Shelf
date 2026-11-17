@@ -228,6 +228,7 @@ internal sealed partial class ShelfWindow : Form
                 "updates-list" => NotificationState(),
                 "updates-check" => RequestUpdateCheck(),
                 "updates-read" => ReadNotifications(message["payload"]?["id"]?.GetValue<string>()),
+                "updates-download" => await DownloadNotificationAsync(message["payload"]?["id"]?.GetValue<string>() ?? ""),
                 "choose-directory" => ChooseDirectory(),
                 "open-download-folder" => OpenDownloadFolder(message["payload"]?["id"]?.GetValue<string>()),
                 "window" => WindowAction(message["payload"]?["action"]?.GetValue<string>() ?? ""),

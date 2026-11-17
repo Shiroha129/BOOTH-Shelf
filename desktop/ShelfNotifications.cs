@@ -10,6 +10,7 @@ internal sealed partial class ShelfWindow
     private Task? updateTask;
     private AccountSession? updateSession;
     private string? notificationError;
+    private readonly HashSet<string> preparingNotificationDownloads = new();
 
     private void InitializeNotifications()
     {
@@ -102,6 +103,28 @@ internal sealed partial class ShelfWindow
     {
         updateMonitor.MarkRead(id);
         return NotificationState();
+    }
+
+    private async Task<int> DownloadNotificationAsync(string id)
+    {
+        boothAccess.ThrowIfPaused();
+        var notice = updateMonitor.State()["items"]?.AsArray().OfType<JsonObject>().FirstOrDefault(item => item["id"]?.GetValue<string>() == id)
+            ?? throw new InvalidOperationException("更新通知已失效，请刷新后重试。");
+        var itemId = notice["itemId"]!.GetValue<string>();
+        var names = notice["files"]!.AsArray().Select(file => file!.GetValue<string>()).Distinct().ToArray();
+        if (localLibrary.List(itemId).Count == 0) throw new FileNotFoundException("该资产没有可用的本地文件");
+        if (downloads.HasActiveItem(itemId) || !preparingNotificationDownloads.Add(itemId))
+            throw new InvalidOperationException("该资产正在下载，请在下载页查看。");
+        try
+        {
+            var selection = await ListFilesAsync(itemId, refresh: true);
+            boothAccess.ThrowIfPaused();
+            var local = localLibrary.List(itemId).OfType<JsonObject>().ToArray();
+            var destination = local.LastOrDefault(file => names.Contains(file["name"]?.GetValue<string>())) ?? local.LastOrDefault()
+                ?? throw new FileNotFoundException("该资产没有可用的本地文件");
+            return downloads.EnqueueUpdate(selection["ticket"]!.GetValue<string>(), names, destination);
+        }
+        finally { preparingNotificationDownloads.Remove(itemId); }
     }
 
     private void RefreshNotificationLibrary(JsonObject? snapshot = null)

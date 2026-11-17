@@ -52,7 +52,7 @@ for (const [name, status, body, challenge] of [["rateLimit", 429, "Slow down", f
 const catalog = JSON.parse(catalogText);
 window.element = id => window.document.getElementById(id);
 window.safeURL = value => value;
-window.run = action => action();
+window.run = async action => { try { return await action(); } catch (error) { window.notify(error.message, true); return null; } };
 window.showView = () => {};
 window.settings = {};
 window.boothAccessState = {};
@@ -109,7 +109,37 @@ for (const [index, language] of ["zh-CN", "zh-TW", "ja", "en", "ko"].entries()) 
     boothAccessState = { paused: false };
     renderBoothAccess();
     checkFixture("resumeHidesWarning_${language}", element("booth-access-banner").hidden);
+    window.downloadChecks = (async () => {
+      const calls = [];
+      let complete;
+      let view;
+      let failure;
+      desktopRequest = (action, payload) => { calls.push({ action, payload }); return new Promise(resolve => { complete = resolve; }); };
+      showView = value => { view = value; };
+      notify = message => { failure = message; };
+      const button = document.querySelector(".notification-download");
+      checkFixture("downloadButton_${language}", button?.textContent === t("↓ 下载") && !button.disabled);
+      const pending = button.onclick();
+      renderNotifications();
+      checkFixture("downloadPending_${language}", document.querySelector(".notification-download").disabled && document.querySelector(".notification-download").textContent === t("准备下载…"));
+      await button.onclick();
+      checkFixture("downloadOnlyNoticeId_${language}", calls.length === 1 && calls[0].action === "updates-download" && JSON.stringify(calls[0].payload) === JSON.stringify({ id: "notice1" }));
+      complete(1);
+      await pending;
+      checkFixture("downloadQueue_${language}", view === "downloads" && !document.querySelector(".notification-download").disabled && !notificationState.items[0].read);
+      view = null;
+      desktopRequest = async () => { throw new Error("Download failed"); };
+      await document.querySelector(".notification-download").onclick();
+      checkFixture("downloadRetry_${language}", failure === "Download failed" && !document.querySelector(".notification-download").disabled && view === null && !notificationState.items[0].read);
+      desktopRequest = async (action, payload) => {
+        checkFixture("readStillWorks_${language}", action === "updates-read" && payload.id === "notice1");
+        return { ...notificationState, items: notificationState.items.map(item => ({ ...item, read: true })) };
+      };
+      await document.querySelector(".notification-card .secondary").onclick();
+      checkFixture("readAfterDownload_${language}", notificationState.items[0].read && document.querySelector(".notification-card .secondary").disabled);
+    })();
   `);
+  await window.downloadChecks;
 }
 let savedInterval;
 window.desktopRequest = async (action, payload) => {

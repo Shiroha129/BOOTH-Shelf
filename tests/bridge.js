@@ -1,6 +1,6 @@
 const testFixture = {
   testing: true,
-  appUpdate: { status: "idle", currentVersion: "1.0.7" },
+  appUpdate: { status: "idle", currentVersion: "1.0.8" },
   systemLanguage: "zh-CN",
   settings: { currency: "CNY", downloadDirectory: "C:\\TestDownloads", rememberSession: true, pinnedTags: [], language: "auto", closeBehavior: "ask", updateNotifications: true, notificationIntervalMinutes: 60 },
   boothAccess: { paused: false },
@@ -80,6 +80,14 @@ window.chrome.webview = {
         case "updates-read":
           for (const notice of testFixture.notifications.items) if (!payload?.id || payload.id === notice.id) notice.read = true;
           result = testFixture.notifications; break;
+        case "updates-download": {
+          const notice = testFixture.notifications.items.find(item => item.id === payload.id);
+          const files = (notice?.files || []).map(name => ({ id: crypto.randomUUID(), itemId: notice.itemId, title: notice.title, name, state: "queued", bytes: 0, createdAt: new Date().toISOString() }));
+          testFixture.downloads.unshift(...files);
+          for (const listener of testListeners) listener({ data: { type: "downloads", items: structuredClone(testFixture.downloads) } });
+          result = files.length;
+          break;
+        }
         case "updates-list": case "updates-check":
           testFixture.notifications.enabled = testFixture.settings.updateNotifications;
           testFixture.notifications.detectionEnabled = testFixture.settings.notificationIntervalMinutes !== 0;

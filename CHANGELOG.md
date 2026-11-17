@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.8 — 2026-11-17
+
+### 中文
+
+- 更新通知新增下载按钮，将更新文件保存到对应资产的本地库目录。
+
+### 日本語
+
+- 更新通知にダウンロードボタンを追加。更新ファイルを該当アセットのローカルフォルダーに保存。
+
+### English
+
+- Download updated files directly from notifications into the asset’s local library folder.
+
 ## 1.0.7 — 2026-11-17
 
 ### 中文
