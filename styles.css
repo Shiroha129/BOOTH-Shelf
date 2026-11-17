@@ -221,7 +221,7 @@ dialog::backdrop { background: #22293675; backdrop-filter: blur(2px); }
 .directory-choice .text-button { padding: 7px 0 0; }
 .file-option > .file-name { flex: 0 1 auto; min-width: 0; }
 .file-size { flex: 0 0 auto; color: #c83232; white-space: nowrap; }
-.file-downloaded-badge { flex: 0 0 auto; color: #c83232; font-size: 12px; white-space: nowrap; }
+.file-downloaded-badge { flex: 0 0 auto; color: #c83232; white-space: nowrap; }
 .material-badge { flex: 0 0 auto; color: #b04f3c; background: #fae9e2; padding: 1px 7px; font-size: 10px; border-radius: 4px; margin-top: 3px; margin-left: auto; }
 .material-file { background: #fffbf8; }
 #local-dialog { width: min(1060px, 94vw); min-height: 560px; padding: 27px; }

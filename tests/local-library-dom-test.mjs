@@ -35,7 +35,7 @@ check("escapeRestoresFocus", element("asset-menu").hidden && window.document.act
 card.dispatchEvent(new window.KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true, cancelable: true }));
 check("keyboardContextMenu", !element("asset-menu").hidden);
 window.document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
-check("keyboardMenuNavigation", window.document.activeElement === element("asset-library"));
+check("keyboardMenuNavigation", window.document.activeElement === element("asset-copy"));
 element("asset-delete").click();
 await new Promise(resolve => setTimeout(resolve, 40));
 check("deletePreviewsFolders", element("asset-delete-dialog").open && element("asset-delete-paths").textContent.includes("1_测试衣装"));

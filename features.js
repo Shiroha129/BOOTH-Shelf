@@ -155,7 +155,7 @@ function openAssetMenu(event, item, card) {
   assetMenuItem = item;
   assetMenuCard = card;
   element("asset-web").href = "https://booth.pm/ja/items/" + item.id;
-  element("asset-copy").hidden = currentView !== "library";
+  element("asset-copy").hidden = false;
   element("asset-library").hidden = currentView !== "local";
   element("asset-folder").hidden = currentView !== "local";
   element("asset-delete").hidden = currentView !== "local";

@@ -268,7 +268,7 @@ internal static class FeatureSelfTest
         await view.ExecuteScriptAsync("element('download-state-filter').value = 'not-downloaded'; element('download-state-filter').dispatchEvent(new Event('change'));");
         Check(await view.ExecuteScriptAsync("!document.querySelector('#grid .card[data-item-id=\"1\"]') && document.querySelector('#grid .card[data-item-id=\"2\"]') !== null") == "true", "未下载筛选未排除本地资产");
         await view.ExecuteScriptAsync("element('clear-filters').click(); showView('local'); document.querySelector('#grid .card').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:500,clientY:300}));");
-        Check(await view.ExecuteScriptAsync("!element('asset-library').hidden && element('asset-copy').hidden && !element('asset-folder').hidden && element('asset-folder').textContent === '打开文件目录' && !element('asset-delete').hidden") == "true", "本地菜单未保留删除、资料库跳转或文件目录操作");
+        Check(await view.ExecuteScriptAsync("!element('asset-library').hidden && !element('asset-copy').hidden && !element('asset-folder').hidden && element('asset-folder').textContent === '打开文件目录' && !element('asset-delete').hidden") == "true", "本地菜单缺少复制链接、删除、资料库跳转或文件目录操作");
         await view.ExecuteScriptAsync("element('asset-library').click();");
         Check(await view.ExecuteScriptAsync("currentView === 'library' && document.querySelector('#grid .card[data-item-id=\"1\"]').classList.contains('located-asset')") == "true", "本地右键菜单未定位到资料库");
         await view.ExecuteScriptAsync("document.querySelector('#grid .downloaded-badge').click();");

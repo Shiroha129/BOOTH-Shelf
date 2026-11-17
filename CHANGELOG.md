@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.7 — 2026-11-17
+
+### 中文
+
+- 对齐下载文件列表中的“已下载”文字。
+- 本地库右键菜单在“跳转网页”下方新增“复制URLs”。
+
+### 日本語
+
+- ダウンロード一覧の「ダウンロード済み」の文字位置を調整。
+- ローカルの右クリックメニューで「商品ページを開く」の下に「URLをコピー」を追加。
+
+### English
+
+- Align the “Downloaded” label with the filename and size.
+- Add “Copy URLs” below “Open webpage” in the local library context menu.
+
 ## 1.0.6 — 2026-11-17
 
 ### 中文
