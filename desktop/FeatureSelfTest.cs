@@ -270,14 +270,21 @@ internal static class FeatureSelfTest
             })()
             """) == "true", "本地头像未清除筛选并定位到资料库资产");
         report["localCoverLocation"] = true;
-        await view.ExecuteScriptAsync("""
-            document.querySelector('#grid .card').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:500,clientY:300}));
+        // Keep synthetic menu actions in one turn; hidden-window blur/scroll events dismiss menus between host calls.
+        var menuChecks = await view.ExecuteScriptAsync("""
+            (() => {
+              document.querySelector('#grid .card').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:500,clientY:300}));
+              return {open:!element('asset-menu').hidden,label:element('asset-web').textContent,copy:!element('asset-copy').hidden,library:element('asset-library').hidden,folder:element('asset-folder').hidden,delete:element('asset-delete').hidden,target:element('asset-web').target};
+            })()
             """);
-        Check(await view.ExecuteScriptAsync("!element('asset-menu').hidden && element('asset-web').textContent === '跳转网页' && !element('asset-copy').hidden && element('asset-library').hidden && element('asset-folder').hidden && element('asset-delete').hidden && element('asset-web').target === '_blank'") == "true", "资料库右键菜单内容或外部网页链接错误");
+        var menu = JsonNode.Parse(menuChecks)!;
+        Check(menu["open"]!.GetValue<bool>() && menu["label"]!.GetValue<string>() == "跳转网页" && menu["copy"]!.GetValue<bool>()
+            && menu["library"]!.GetValue<bool>() && menu["folder"]!.GetValue<bool>() && menu["delete"]!.GetValue<bool>() && menu["target"]!.GetValue<string>() == "_blank",
+            "资料库右键菜单内容或外部网页链接错误：" + menuChecks);
         var previousClipboard = Clipboard.GetDataObject();
         try
         {
-            await view.ExecuteScriptAsync("element('asset-copy').click();");
+            await view.ExecuteScriptAsync("document.querySelector('#grid .card').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:500,clientY:300})); element('asset-copy').click();");
             await Task.Delay(150);
             Check(Clipboard.ContainsText() && Clipboard.GetText() == "https://booth.pm/ja/items/1", "商品链接未复制到系统剪贴板");
             await ImageClipboardAsync(view);
@@ -292,7 +299,7 @@ internal static class FeatureSelfTest
         Check(await view.ExecuteScriptAsync("!document.querySelector('#grid .card[data-item-id=\"1\"]') && document.querySelector('#grid .card[data-item-id=\"2\"]') !== null") == "true", "未下载筛选未排除本地资产");
         await view.ExecuteScriptAsync("element('clear-filters').click(); showView('local'); document.querySelector('#grid .card').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:500,clientY:300}));");
         Check(await view.ExecuteScriptAsync("!element('asset-library').hidden && !element('asset-copy').hidden && !element('asset-folder').hidden && element('asset-folder').textContent === '打开文件目录' && !element('asset-delete').hidden") == "true", "本地菜单缺少复制链接、删除、资料库跳转或文件目录操作");
-        await view.ExecuteScriptAsync("element('asset-library').click();");
+        await view.ExecuteScriptAsync("document.querySelector('#grid .card').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:500,clientY:300})); element('asset-library').click();");
         Check(await view.ExecuteScriptAsync("currentView === 'library' && document.querySelector('#grid .card[data-item-id=\"1\"]').classList.contains('located-asset')") == "true", "本地右键菜单未定位到资料库");
         await view.ExecuteScriptAsync("document.querySelector('#grid .downloaded-badge').click();");
         Check(await view.ExecuteScriptAsync("currentView === 'local' && document.querySelector('#grid .card[data-item-id=\"1\"]').classList.contains('located-asset') && !element('local-dialog').open") == "true", "已下载标记未定位到本地库");
@@ -308,7 +315,43 @@ internal static class FeatureSelfTest
         await view.ExecuteScriptAsync("element('product-dialog').close(); desktopRequest = savedRequest; delete globalThis.savedRequest; showView('library');");
         report["embeddedProductDetails"] = true;
         report["fileDialogSelection"] = true;
+        report["diagnosticInterface"] = await DiagnosticInterfaceAsync(view);
         return report;
+    }
+
+    private static async Task<bool> DiagnosticInterfaceAsync(WebView2 view)
+    {
+        await view.ExecuteScriptAsync("globalThis.diagnosticLanguage = settings.language;");
+        try
+        {
+            foreach (var language in new[] { "zh-CN", "zh-TW", "ja", "en", "ko" })
+            {
+                await view.ExecuteScriptAsync($"settings.language = '{language}'; applyLanguage(); showView('settings'); element('open-diagnostics').scrollIntoView();");
+                await Task.Delay(80);
+                Check(await view.ExecuteScriptAsync("""
+                    (() => {
+                      const button = element('open-diagnostics'), row = button.closest('.setting-row'), bounds = row.getBoundingClientRect();
+                      return button.textContent === t('打开日志目录') && [...row.children].every(node => {
+                        const rect = node.getBoundingClientRect();
+                        return rect.left >= bounds.left && rect.right <= bounds.right + 1 && node.scrollWidth <= node.clientWidth + 2;
+                      });
+                    })()
+                    """) == "true", "诊断日志设置行溢出：" + language);
+                using (var image = File.Create(Path.Combine(Program.DataDirectory, "diagnostics-settings-" + language + ".png")))
+                    await view.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
+                await view.ExecuteScriptAsync("""
+                    showView('library');
+                    notify('[BS-SYNC-LIBRARY-FREE-NETWORK] 读取免费商品（第 2 页）：BOOTH 请求超时 · 请检查网络后重试；若仍失败，可在设置中打开诊断日志。', true);
+                    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                    """);
+                await Task.Delay(80);
+                Check(await view.ExecuteScriptAsync("element('notice').textContent.includes(t('读取免费商品')) && element('notice').textContent.includes(t('BOOTH 请求超时')) && element('notice').scrollWidth <= element('notice').clientWidth + 2 && element('notice').getBoundingClientRect().top >= 28 && element('notice').getBoundingClientRect().bottom <= innerHeight") == "true", "诊断错误提示未翻译、溢出或被遮挡：" + language);
+                using (var image = File.Create(Path.Combine(Program.DataDirectory, "diagnostics-error-" + language + ".png")))
+                    await view.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
+            }
+            return true;
+        }
+        finally { await view.ExecuteScriptAsync("settings.language = diagnosticLanguage; delete globalThis.diagnosticLanguage; applyLanguage(); showView('library');"); }
     }
 
     private static async Task ImageClipboardAsync(WebView2 view)

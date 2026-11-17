@@ -117,9 +117,20 @@ internal static class SyncWorkflowSelfTest
             new JsonObject { ["id"] = "2", ["sections"] = new JsonArray("gift"), ["acquiredRanks"] = new JsonObject { ["gift"] = 0 } }) };
         Check(LibraryCoordinator.Baseline(ranked, "gift")["items"]![0]!["id"]!.GetValue<string>() == "2", "缺少独立来源快照时未按该来源获取顺序找最新项");
         await Run("empty-sections", baseline, "quick", (url, number, _) => Task.FromResult(Page(url, number, 1)));
+        var retried = false;
+        await Run("retry-with-diagnostics", baseline, "full", (url, number, token) =>
+        {
+            if (!retried && url == ShelfWindow.LibraryUrl && number == 2)
+            {
+                retried = true;
+                throw new SyncReadException("synthetic temporary failure", true);
+            }
+            return Read(url, number, token);
+        });
+        Check(retried, "诊断日志改变了临时失败的重试流程");
         return new JsonObject { ["quickRequestsAcrossThreeSections"] = 5, ["fullRequestsAcrossThreeSections"] = 12,
             ["independentMarkers"] = true, ["noSpeculativePages"] = true, ["newItemsOnlyMetadata"] = true,
             ["preservesTagsPricesVariants"] = true, ["firstPageStops"] = true, ["initialAndLegacySync"] = true,
-            ["missingMarkerPreservesLibrary"] = true, ["emptySections"] = true };
+            ["missingMarkerPreservesLibrary"] = true, ["emptySections"] = true, ["diagnosticsPreserveRetries"] = true };
     }
 }

@@ -46,8 +46,8 @@
         row = row.parentElement;
       }
     }
-    if (paid && (totalMatch === null || !lines.length)) throw new Error("订单 " + id + " 的实际支付金额无法确认，已保留已有价格。");
-    return { id, paid, canceled, total: totalMatch ? Number(totalMatch[1].replace(/,/g, "")) : null, currency: "JPY", lines,
+    return { id, paid, canceled, paymentUnconfirmed: paid && (totalMatch === null || !lines.length),
+      total: totalMatch ? Number(totalMatch[1].replace(/,/g, "")) : null, currency: "JPY", lines,
       createdAt: createdMatch ? createdMatch[1].replace(/\//g, "-").replace(" ", "T") + "+09:00" : null };
   }
   const jobs = new Map();

@@ -12,6 +12,7 @@ namespace BoothShelf;
 internal static class Program
 {
     internal static string DataDirectory = "";
+    internal static DiagnosticLog? Diagnostics;
     internal static bool SmokeTest;
     internal static readonly Version AppVersion = new(typeof(Program).Assembly.GetName().Version!.ToString(3));
     internal static string? AppUpdateReadyEvent;
@@ -36,6 +37,8 @@ internal static class Program
             ? Path.GetFullPath(args[dataIndex + 1])
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BOOTH-Shelf");
         Directory.CreateDirectory(DataDirectory);
+        Diagnostics = new DiagnosticLog(DataDirectory);
+        Diagnostics.Record("startup", "started");
         NativeLanguage.Initialize(DataDirectory);
         if (args.Contains("--core-test"))
         {
@@ -85,9 +88,10 @@ internal static class Program
 
     internal static void ReportFailure(Exception error)
     {
+        var failure = DiagnosticFailure.Capture("startup", error);
         File.WriteAllText(Path.Combine(DataDirectory, "startup-error.txt"), error.ToString());
         if (!SmokeTest)
-            MessageBox.Show(NativeLanguage.Text("程序遇到错误：") + "\n" + NativeLanguage.Message(error.Message)
+            MessageBox.Show(NativeLanguage.Text("程序遇到错误：") + "\n" + NativeLanguage.Message(failure.Message)
                 + "\n\n" + NativeLanguage.Text("若缺少 Microsoft Edge WebView2 Runtime，请先安装该微软组件。") + "\n" + NativeLanguage.Text("错误详情保存在：")
                 + Path.Combine(DataDirectory, "startup-error.txt"), "BOOTH Shelf", MessageBoxButtons.OK, MessageBoxIcon.Error);
         Environment.ExitCode = 1;
@@ -201,12 +205,13 @@ internal sealed partial class ShelfWindow : Form
     {
         if (!IsAppUri(eventArgs.Source)) return;
         string? requestId = null;
+        string? action = null;
         try
         {
             var message = JsonNode.Parse(eventArgs.WebMessageAsJson)?.AsObject() ?? throw new InvalidDataException("无效请求");
             requestId = message["id"]?.GetValue<string>();
             if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > 100) return;
-            var action = message["action"]?.GetValue<string>();
+            action = message["action"]?.GetValue<string>();
             if (appUpdateStatus == "installing" && action != "window") throw new InvalidOperationException("正在重启以安装更新…");
             object? result = action switch
             {
@@ -248,18 +253,30 @@ internal sealed partial class ShelfWindow : Form
                 "sync" => await SyncAsync(message["payload"]?["mode"]?.GetValue<string>() ?? "full"),
                 "pause" => PauseSync(),
                 "export" => await ExportAsync(),
+                "open-diagnostics" => OpenDiagnostics(),
                 _ => throw new InvalidOperationException("未知操作")
             };
             Reply(new { id = requestId, result });
         }
         catch (OperationCanceledException)
         {
-            Reply(new { id = requestId, error = "已暂停，成功读取的页面已保存。下次选择同一模式即可继续；原有完整资料库未覆盖。" });
+            Program.Diagnostics?.Record(DiagnosticFailure.ActionStep(action), "canceled");
+            Reply(new { id = requestId, error = action == "sync"
+                ? "已暂停，成功读取的页面已保存。下次选择同一模式即可继续；原有完整资料库未覆盖。"
+                : "操作已取消。" });
         }
         catch (Exception error)
         {
-            Reply(new { id = requestId, error = error.Message });
+            Reply(new { id = requestId, error = DiagnosticFailure.Capture(DiagnosticFailure.ActionStep(action), error).Message });
         }
+    }
+
+    private static bool OpenDiagnostics()
+    {
+        var path = Path.Combine(Program.DataDirectory, "logs");
+        Directory.CreateDirectory(path);
+        Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        return true;
     }
 
     private void Reply(object message)

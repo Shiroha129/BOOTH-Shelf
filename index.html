@@ -13,7 +13,7 @@
 <button class="nav" id="notifications-view"><span>♧　通知</span><span id="notification-count" hidden></span></button>
 <button class="nav" id="settings-view">⚙　设置</button>
 <a class="nav" href="https://accounts.booth.pm/library" target="_blank" rel="noreferrer">↗　BOOTH Library</a></nav>
-<div class="sidebar-bottom">BOOTH SHELF <span>v1.0.8</span></div>
+<div class="sidebar-bottom">BOOTH SHELF <span>v1.0.9</span></div>
 </aside>
 <main class="workspace">
 <header class="heading"><h1 id="view-title">资料库</h1><div class="heading-actions"><span id="auth-state" class="auth-state pending">正在检查登录…</span><button class="text-button" id="retry-auth" hidden>重新检查</button><button class="secondary" id="login" hidden>登录 BOOTH</button><select id="sync-mode" aria-label="同步模式"><option value="full">全局更新 / 续传</option><option value="quick">快速更新 / 续传</option></select><button class="secondary" id="pause-sync" hidden>暂停同步</button><button class="primary" id="sync">↻　同步 BOOTH</button></div></header>
@@ -57,6 +57,7 @@
 <div class="setting-row"><div><h2>BOOTH 账号</h2><p id="settings-auth" class="muted">检查登录状态中…</p></div><button class="secondary" id="relogin">打开登录窗口</button></div>
 <div class="setting-row"><div><h2>记住登录</h2><label class="checkbox-label"><input type="checkbox" id="remember-session">记住登录状态</label><p id="session-state" class="muted">登录成功后自动加密保存</p></div><button class="secondary" id="save-session">立即保存</button></div>
 <div class="setting-row"><div><h2>资料库备份</h2></div><button class="secondary" id="export">导出 JSON</button></div>
+<div class="setting-row"><div><h2>诊断日志</h2><p class="muted">记录出错步骤和错误编号，便于排查问题。</p></div><button class="secondary" id="open-diagnostics">打开日志目录</button></div>
 </section>
 <section id="notifications-panel" hidden><div class="notification-toolbar"><p id="notification-status" class="muted" role="status" hidden></p><button id="check-updates" class="secondary">检查更新</button><button id="read-all-notifications" class="secondary">全部已读</button></div><label class="checkbox-label"><input type="checkbox" id="unread-notifications">只看未读</label><div id="notification-list"></div><p id="notifications-empty" class="muted">暂无更新通知</p><button id="more-notifications" class="secondary" hidden>加载更多通知</button></section>
 </main>

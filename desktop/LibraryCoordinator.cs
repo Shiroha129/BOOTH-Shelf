@@ -26,20 +26,29 @@ internal static class LibraryCoordinator
             var known = previous["items"]!.AsArray().Select(item => item!["id"]!.GetValue<string>()).ToHashSet();
             async Task<LibraryPage> ReadPage(int number, CancellationToken pageToken)
             {
-                var page = await read(section.Url, number, pageToken);
-                page.Validate(number);
-                if (mode == "full") await enrich(page.Items, pageToken);
-                else
+                var step = "sync.library." + section.Id;
+                Program.Diagnostics?.Record(step, "started", page: number);
+                try
                 {
-                    var added = new JsonArray(page.Items.OfType<JsonObject>().TakeWhile(item => item["id"]!.GetValue<string>() != newest)
-                        .Where(item => !known.Contains(item["id"]!.GetValue<string>())).Select(item => (JsonNode)item.DeepClone()).ToArray());
-                    if (added.Count > 0) await enrich(added, pageToken);
-                    var enriched = added.OfType<JsonObject>().GroupBy(item => item["id"]!.GetValue<string>()).ToDictionary(group => group.Key, group => group.First());
-                    foreach (var item in page.Items.OfType<JsonObject>())
-                        if (enriched.TryGetValue(item["id"]!.GetValue<string>(), out var metadata))
-                            foreach (var field in metadata.Where(field => field.Key != "files")) item[field.Key] = field.Value?.DeepClone();
+                    var page = await read(section.Url, number, pageToken);
+                    page.Validate(number);
+                    step = "sync.metadata";
+                    if (mode == "full") await enrich(page.Items, pageToken);
+                    else
+                    {
+                        var added = new JsonArray(page.Items.OfType<JsonObject>().TakeWhile(item => item["id"]!.GetValue<string>() != newest)
+                            .Where(item => !known.Contains(item["id"]!.GetValue<string>())).Select(item => (JsonNode)item.DeepClone()).ToArray());
+                        if (added.Count > 0) await enrich(added, pageToken);
+                        var enriched = added.OfType<JsonObject>().GroupBy(item => item["id"]!.GetValue<string>()).ToDictionary(group => group.Key, group => group.First());
+                        foreach (var item in page.Items.OfType<JsonObject>())
+                            if (enriched.TryGetValue(item["id"]!.GetValue<string>(), out var metadata))
+                                foreach (var field in metadata.Where(field => field.Key != "files")) item[field.Key] = field.Value?.DeepClone();
+                    }
+                    Program.Diagnostics?.Record("sync.library." + section.Id, "completed", page: number, count: page.Items.Count);
+                    return page;
                 }
-                return page;
+                catch (OperationCanceledException) when (pageToken.IsCancellationRequested) { throw; }
+                catch (Exception error) { DiagnosticFailure.Note(step, error, page: number); throw; }
             }
             progress(section.Label, 0, 1, 0, "读取商品与标签", null);
             var first = await ReadPage(1, token);

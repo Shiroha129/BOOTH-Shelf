@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.9 — 2026-11-18
+
+### 中文
+
+- 修复部分订单金额无法识别时中断商品同步的问题，保留已有价格。
+- 新增分步骤错误提示、错误编号和诊断日志，可在设置中打开日志目录。
+
+### 日本語
+
+- 一部の注文金額を確認できない場合も商品同期を継続し、保存済みの価格を保持。
+- エラーの発生箇所・コード・診断ログを追加。設定からログフォルダーを開けます。
+
+### English
+
+- Keep item sync running when an order amount cannot be confirmed, preserving saved prices.
+- Add error stages, error codes and diagnostic logs, accessible from Settings.
+
 ## 1.0.8 — 2026-11-17
 
 ### 中文

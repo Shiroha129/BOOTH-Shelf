@@ -355,9 +355,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const variants = AccountReader.receipt(receipt(line("1", "790", "50") + line("1", "100"), "940"), "https://accounts.booth.pm/orders/123");
     check("receiptVariantsAndBoost", variants.lines.length === 2 && variants.lines[0].boost === 50);
     check("receiptCanceled", !AccountReader.receipt(receipt(line("1", "790"), "790", "Canceled"), "https://accounts.booth.pm/orders/123").paid);
-    let rejected = false;
-    try { AccountReader.receipt(receipt(line("1", "790"), "unknown"), "https://accounts.booth.pm/orders/123"); } catch { rejected = true; }
-    check("receiptUnknownRejected", rejected);
+    const unknownReceipt = AccountReader.receipt(receipt(line("1", "790"), "unknown"), "https://accounts.booth.pm/orders/123");
+    check("receiptUnknownUnconfirmed", unknownReceipt.paymentUnconfirmed && unknownReceipt.total === null);
     const orders = AccountReader.orders(parse('<main><a href="/orders/11">Order</a><a href="?page=9">9</a></main>'), "https://accounts.booth.pm/orders?page=1");
     check("orderPagination", orders.ids.join() === "11" && orders.maxPage === 9);
     check("materialNames", ["Materials.zip", "Material.unitypackage", "asset_Mat_v2.zip", "マテリアル.zip", "shader.zip", "lilToon.zip"].every(BoothParser.isMaterial) && !BoothParser.isMaterial("Animation.zip"));

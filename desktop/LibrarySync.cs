@@ -225,7 +225,7 @@ internal sealed class LibrarySync(
                 {
                     var attempt = failures.GetValueOrDefault(result.Number) + 1;
                     failures[result.Number] = attempt;
-                    if (attempt >= 4) fatal ??= new IOException($"第 {result.Number} 页多次读取失败：{retry.Message}");
+                    if (attempt >= 4) fatal ??= new IOException($"第 {result.Number} 页多次读取失败：{retry.Message}", retry);
                     else backoff = Math.Max(backoff, Math.Max(retry.RetryAfterMs, 5000 * (1 << (attempt - 1))));
                     continue;
                 }

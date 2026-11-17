@@ -68,10 +68,10 @@ internal sealed partial class ShelfWindow
             appUpdateStatus = appRelease == null ? "current" : "available";
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { return; }
-        catch (Exception)
+        catch (Exception error)
         {
             appUpdateStatus = "error";
-            appUpdateError = "无法检查软件更新，请检查网络后重试。";
+            appUpdateError = DiagnosticFailure.Capture("app-update.check", error, "无法检查软件更新，请检查网络后重试。").Message;
         }
         if (!closingSession) PublishAppUpdate();
     }
@@ -116,10 +116,10 @@ internal sealed partial class ShelfWindow
             appUpdateStatus = "available";
             appUpdateError = "";
         }
-        catch (Exception)
+        catch (Exception error)
         {
             appUpdateStatus = "error";
-            appUpdateError = "更新下载或校验失败，旧版未更改，请重试。";
+            appUpdateError = DiagnosticFailure.Capture("app-update.download", error, "更新下载或校验失败，旧版未更改，请重试。").Message;
         }
         if (!closingSession) PublishAppUpdate();
     }
@@ -158,7 +158,8 @@ internal sealed partial class ShelfWindow
         catch (Exception error)
         {
             appUpdateStatus = "ready";
-            appUpdateError = error.Message == AppUpdateInstaller.WriteError ? AppUpdateInstaller.WriteError : AppUpdateInstaller.InstallError;
+            appUpdateError = DiagnosticFailure.Capture("app-update.install", error,
+                error.Message == AppUpdateInstaller.WriteError ? AppUpdateInstaller.WriteError : AppUpdateInstaller.InstallError).Message;
             PublishAppUpdate();
         }
     }

@@ -72,7 +72,12 @@ internal sealed partial class ShelfWindow
             notificationError = null;
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { publish = true; }
-        catch (Exception) { notificationError = "error"; publish = true; }
+        catch (Exception error)
+        {
+            Program.Diagnostics?.Record("notifications", "error", DiagnosticFailure.CodeFor("notifications", error), error);
+            notificationError = "error";
+            publish = true;
+        }
         finally
         {
             updateCancellation = null;

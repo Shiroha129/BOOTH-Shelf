@@ -19,6 +19,7 @@ internal static class CoreSelfTest
         try
         {
             report["language"] = LanguageSelfTest.Run(Subdirectory(run, "language"));
+            report["diagnostics"] = DiagnosticLogSelfTest.Run(Subdirectory(run, "diagnostics"));
             report["windowsStartup"] = WindowsStartupSelfTest.Run(Subdirectory(run, "windows-startup"));
             report["runtimeInstaller"] = await RuntimeInstallerSelfTest.RunAsync(Subdirectory(run, "runtime-installer"));
             report["appUpdateClient"] = await AppUpdateClientSelfTest.RunAsync(Subdirectory(run, "app-update-client"));
@@ -145,8 +146,51 @@ internal static class CoreSelfTest
         new PurchaseCatalog(partialRoot).Apply(unknown);
         Check(!unknown["spend"]!["complete"]!.GetValue<bool>() && unknown["spend"]!["orders"]!.GetValue<int>() == 1
             && unknown["items"]![1]!["purchaseJpy"]!.GetValue<decimal>() == 123, "部分金额冒充全量或抹去旧成交价");
+
+        var unconfirmedRoot = Subdirectory(root, "unconfirmed");
+        var cachedRoot = Subdirectory(unconfirmedRoot, "purchase-cache");
+        var oldReceipt = (JsonObject)receipts["11"].DeepClone();
+        oldReceipt["checkedAt"] = DateTimeOffset.UtcNow.AddDays(-31).ToString("O");
+        File.WriteAllText(Path.Combine(cachedRoot, "11.json"), oldReceipt.ToJsonString());
+        File.WriteAllText(Path.Combine(unconfirmedRoot, "purchase-state.json"), "{\"complete\":true}");
+        var retryPrices = false;
+        var unconfirmedCalls = new List<string>();
+        Task<JsonObject> ReadUnconfirmed(string url, string kind, CancellationToken token)
+        {
+            if (kind == "orders") return Task.FromResult(new JsonObject { ["page"] = 1, ["maxPage"] = 1, ["ids"] = new JsonArray("11", "12", "14") });
+            var id = new Uri(url).Segments.Last();
+            unconfirmedCalls.Add(id);
+            if (!retryPrices && id != "12") return Task.FromResult(new JsonObject
+            {
+                ["id"] = id, ["paid"] = true, ["paymentUnconfirmed"] = true, ["total"] = null,
+                ["lines"] = new JsonArray(new JsonObject { ["itemId"] = id == "11" ? "1" : "4", ["price"] = 9999 })
+            });
+            return Task.FromResult(id == "14"
+                ? JsonNode.Parse("""{"id":"14","paid":true,"total":400,"lines":[{"itemId":"4","price":400,"boost":0}]}""")!.AsObject()
+                : (JsonObject)receipts[id].DeepClone());
+        }
+        var unconfirmed = new PurchaseCatalog(unconfirmedRoot);
+        await unconfirmed.SyncAsync(ReadUnconfirmed, (_, _) => { }, CancellationToken.None);
+        var synced = new JsonObject { ["complete"] = true, ["items"] = new JsonArray(Item("1"), Item("2"), Item("3"), Item("4")) };
+        unconfirmed.Apply(synced);
+        Check(synced["complete"]!.GetValue<bool>() && synced["items"]!.AsArray().Count == 4
+            && !synced["spend"]!["complete"]!.GetValue<bool>() && synced["spend"]!["totalJpy"]!.GetValue<decimal>() == 2700,
+            "未确认的订单金额阻止商品同步或冒充完整金额");
+        Check(synced["items"]![0]!["purchaseJpy"]!.GetValue<decimal>() == 790 && synced["items"]![3]!["purchaseJpy"] == null
+            && File.ReadAllText(Path.Combine(cachedRoot, "11.json")) == oldReceipt.ToJsonString()
+            && !File.Exists(Path.Combine(cachedRoot, "14.json")), "未确认金额覆盖了已知成交价或被保存为零");
+        var retried = new PurchaseCatalog(unconfirmedRoot);
+        retried.Apply(synced);
+        Check(!synced["spend"]!["complete"]!.GetValue<bool>(), "重启后丢失金额待核对状态");
+        retryPrices = true;
+        unconfirmedCalls.Clear();
+        await retried.SyncAsync(ReadUnconfirmed, (_, _) => { }, CancellationToken.None);
+        retried.Apply(synced);
+        Check(unconfirmedCalls.SequenceEqual(new[] { "11", "14" }) && synced["spend"]!["complete"]!.GetValue<bool>()
+            && synced["spend"]!["totalJpy"]!.GetValue<decimal>() == 3100, "后续同步未重试未确认订单或重复累计已确认金额");
         return new JsonObject { ["paidTotals"] = true, ["boost"] = true, ["canceledExcluded"] = true, ["unknownIsNotZero"] = true,
-            ["cacheAfterRestart"] = true, ["incrementalStopsEarly"] = true, ["unchangedSkipsOrders"] = true, ["partialTotalsMarked"] = true };
+            ["cacheAfterRestart"] = true, ["incrementalStopsEarly"] = true, ["unchangedSkipsOrders"] = true, ["partialTotalsMarked"] = true,
+            ["unconfirmedPaymentKeepsLibrary"] = true, ["unconfirmedPreservesCachedPrice"] = true, ["unconfirmedRetriedAfterRestart"] = true };
     }
 
     private static JsonObject LocalFiles(string root)

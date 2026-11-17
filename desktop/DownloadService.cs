@@ -386,6 +386,7 @@ internal sealed class DownloadService : IDisposable
                     record["assetDirectory"] = directory;
                     record["downloadRoot"] = entry.Directory;
                     record["state"] = "downloading";
+                    Program.Diagnostics?.Record("download.transfer", "started");
                     Save();
                     Emit();
                     var started = new TaskCompletionSource<CoreWebView2DownloadOperation>();
@@ -420,6 +421,7 @@ internal sealed class DownloadService : IDisposable
                         record["total"] = operation.TotalBytesToReceive;
                         File.Move(target + ".part", target, false);
                         record["state"] = "completed";
+                        Program.Diagnostics?.Record("download.transfer", "completed");
                         Completed?.Invoke((JsonObject)record.DeepClone());
                     }
                     finally
@@ -429,8 +431,9 @@ internal sealed class DownloadService : IDisposable
                         if (operation.State == CoreWebView2DownloadState.InProgress) operation.Cancel();
                     }
                 }
-                catch (BoothAccessPausedException)
+                catch (BoothAccessPausedException error)
                 {
+                    Program.Diagnostics?.Record("download.transfer", "paused", DiagnosticFailure.CodeFor("download.transfer", error), error);
                     record["state"] = "queued";
                     queue.Enqueue(entry);
                 }
@@ -438,7 +441,8 @@ internal sealed class DownloadService : IDisposable
                 catch (Exception error)
                 {
                     record["state"] = "failed";
-                    record["error"] = error is TimeoutException ? "未开始下载，请在设置中重新登录后重试。" : error.Message;
+                    record["error"] = DiagnosticFailure.Capture("download.transfer", error,
+                        error is TimeoutException ? "未开始下载，请在设置中重新登录后重试。" : null).Message;
                 }
                 finally
                 {
@@ -459,8 +463,9 @@ internal sealed class DownloadService : IDisposable
         }
         catch (Exception error)
         {
+            var failure = DiagnosticFailure.Capture("download.prepare", error);
             foreach (var record in history.OfType<JsonObject>().Where(item => item["state"]?.GetValue<string>() == "queued"))
-            { record["state"] = "failed"; record["error"] = error.Message; }
+            { record["state"] = "failed"; record["error"] = failure.Message; }
             Save();
             Emit();
         }

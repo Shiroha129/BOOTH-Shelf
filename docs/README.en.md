@@ -33,6 +33,8 @@ A Windows home for your BOOTH assets. Sync, filter, download, and keep up with f
 
 Login information stays on your PC. The Windows executable is not yet code-signed. Free items are downloaded from their product pages.
 
+Item sync continues if an order amount cannot be read, preserving existing prices. Errors show the failed step and a diagnostic code. Open **Settings → Diagnostic logs → Open logs folder** to collect logs. Logs exclude login credentials and item or order content. Include the error code and log files when reporting a problem; do not share the entire app data folder.
+
 [MIT License](../LICENSE) · [Third-party notices](../THIRD-PARTY-NOTICES.md) · [Changelog](../CHANGELOG.md)
 
 An independent project, unaffiliated with BOOTH, pixiv or BOOTH Library Manager.

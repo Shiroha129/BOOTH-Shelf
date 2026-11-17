@@ -67,7 +67,7 @@ internal sealed partial class ShelfWindow
             PublishSessionStatus("restored", missing.Count > 0 ? "已恢复加密会话，正在向 BOOTH 验证" : "已保留现有会话，正在向 BOOTH 验证", saved.SavedAt);
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
-        catch (Exception) { PublishSessionStatus("error", "会话备份未能恢复，原文件已保留；可重新登录后保存"); }
+        catch (Exception error) { PublishSessionStatus("error", DiagnosticFailure.Capture("account.session", error, "会话备份未能恢复，原文件已保留；可重新登录后保存").Message); }
         finally { sessionLock.Release(); }
     }
 
@@ -86,8 +86,8 @@ internal sealed partial class ShelfWindow
             else PublishSessionStatus("waiting", "尚未读取到可保存的登录会话，旧备份保留");
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-        catch (CryptographicException) { PublishSessionStatus("error", "Windows 加密暂不可用，未保存明文；请在正常用户桌面重新保存"); }
-        catch (Exception) { PublishSessionStatus("error", "保存会话失败，旧备份保留；可稍后点击立即保存"); }
+        catch (CryptographicException error) { PublishSessionStatus("error", DiagnosticFailure.Capture("account.session", error, "Windows 加密暂不可用，未保存明文；请在正常用户桌面重新保存").Message); }
+        catch (Exception error) { PublishSessionStatus("error", DiagnosticFailure.Capture("account.session", error, "保存会话失败，旧备份保留；可稍后点击立即保存").Message); }
         finally { sessionLock.Release(); }
     }
 

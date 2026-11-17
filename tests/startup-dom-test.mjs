@@ -24,6 +24,11 @@ async function createHarness(options = {}) {
     const startupFixture = ${JSON.stringify(options)};
     testFixture.testing = startupFixture.testing === true;
     testFixture.boothAccess.paused = startupFixture.paused === true;
+    if (startupFixture.language) testFixture.settings.language = startupFixture.language;
+    if (startupFixture.unconfirmedPayments) {
+      testFixture.snapshot.spend.unconfirmedOrders = 1;
+      testFixture.snapshot.spend.complete = false;
+    }
     if (startupFixture.firstUse) testFixture.snapshot = null;
     if (startupFixture.empty) testFixture.snapshot.items = [];
     if (startupFixture.pendingMode) testFixture.pendingMode = startupFixture.pendingMode;
@@ -103,6 +108,25 @@ try {
     check("translatedStartupOption_" + language, checkbox.closest("label").textContent.trim() === harness.window.I18n.t("开机自启"));
   }
 } finally { harness.close(); }
+
+for (const language of ["zh-CN", "zh-TW", "ja", "en", "ko"]) {
+  const harness = await createHarness({ language, unconfirmedPayments: true });
+  try {
+    const notice = harness.element("notice");
+    check("unconfirmedPaymentKeepsItems_" + language, harness.syncs().length === 1 && harness.window.document.querySelectorAll(".card").length > 0);
+    check("unconfirmedPaymentIsWarning_" + language, notice.textContent === harness.window.I18n.t("同步完成 · {count} 件商品；部分订单金额待核对 [{code}]", { count: "5", code: "BS-SYNC-ORDERS-PRICE" }) && !notice.classList.contains("error"));
+    check("unconfirmedPaymentFinancials_" + language, harness.element("spend-detail").textContent.includes(harness.window.I18n.t("部分订单金额待核对")));
+    harness.element("settings-view").click();
+    const button = harness.element("open-diagnostics");
+    check("diagnosticsInSettings_" + language, button.closest("#settings-panel") && button.textContent === harness.window.I18n.t("打开日志目录"));
+    button.click();
+    await wait();
+    check("diagnosticsUsesNativeFolder_" + language, harness.messages.some(message => message.action === "open-diagnostics" && message.payload === null));
+    const source = "[BS-SYNC-ORDERS-DETAIL-NETWORK] 核对订单金额：BOOTH 请求超时 · 请检查网络后重试；若仍失败，可在设置中打开诊断日志。";
+    const translated = harness.window.I18n.message(source);
+    check("diagnosticErrorTranslated_" + language, translated.includes("BS-SYNC-ORDERS-DETAIL-NETWORK") && translated.includes(harness.window.I18n.t("核对订单金额")) && translated.includes(harness.window.I18n.t("BOOTH 请求超时")));
+  } finally { harness.close(); }
+}
 
 for (const options of [{ firstUse: true, enabled: true }, { firstUse: true, settingsError: true }]) {
   const harness = await createHarness(options);

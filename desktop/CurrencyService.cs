@@ -43,7 +43,7 @@ internal sealed class CurrencyService : IDisposable
         catch (Exception error)
         {
             var failed = (JsonObject)Rates.DeepClone();
-            failed["error"] = "汇率更新失败，已保留缓存：" + error.Message;
+            failed["error"] = DiagnosticFailure.Capture("currency", error, "汇率更新失败，已保留缓存：" + error.Message).Message;
             return failed;
         }
         return (JsonObject)Rates.DeepClone();

@@ -37,7 +37,7 @@ function priceText(item) {
 function renderFinancials() {
   const spend = snapshot.spend;
   element("total-spend").textContent = spend && (spend.complete !== false || spend.orders > 0) ? converted(spend.totalJpy) || money(spend.totalJpy) : t("待全局更新");
-  element("spend-detail").textContent = spend ? money(spend.totalJpy) + " · " + t("{count} 笔已核对订单", { count: spend.orders.toLocaleString(I18n.locale) }) + (spend.complete === false ? " · " + t("历史待全局更新") : "") : t("全局更新后统计历史成交金额");
+  element("spend-detail").textContent = spend ? money(spend.totalJpy) + " · " + t("{count} 笔已核对订单", { count: spend.orders.toLocaleString(I18n.locale) }) + (spend.complete === false ? " · " + t(spend.unconfirmedOrders > 0 ? "部分订单金额待核对" : "历史待全局更新") : "") : t("全局更新后统计历史成交金额");
   element("total-spend").title = t("已核对订单的实际支付金额，包含 BOOST 和订单费用；非日元金额按最新可用汇率估算。");
 }
 function renderCurrency() {

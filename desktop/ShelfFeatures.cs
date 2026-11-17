@@ -304,10 +304,13 @@ internal sealed partial class ShelfWindow
                 if (attempt < 3) await Task.Delay(400, lifetime.Token);
             }
             WriteAuthenticationDiagnostic(authenticated, authentication.View.Source, null);
+            Program.Diagnostics?.Record("account.authentication", authenticated == true ? "authenticated" : authenticated == false ? "login-required" : "unknown",
+                authenticated == null ? "BS-ACCOUNT-AUTHENTICATION-UNKNOWN" : null);
         }
         catch (Exception error)
         {
             var source = authentication?.View.Source;
+            Program.Diagnostics?.Record("account.authentication", "error", DiagnosticFailure.CodeFor("account.authentication", error), error);
             authentication?.Dispose();
             authentication = null;
             WriteAuthenticationDiagnostic(null, source, error.GetType().Name);

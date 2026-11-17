@@ -571,7 +571,9 @@ async function synchronize() {
     setSnapshot(result);
     setAuth(true);
     element("sync-mode").value = "quick";
-    notify({ key: "同步完成 · {count} 件商品", values: { count: snapshot.items.length.toLocaleString(I18n.locale) } }, false, true);
+    const unconfirmed = snapshot.spend?.unconfirmedOrders > 0;
+    notify({ key: unconfirmed ? "同步完成 · {count} 件商品；部分订单金额待核对 [{code}]" : "同步完成 · {count} 件商品",
+      values: { count: snapshot.items.length.toLocaleString(I18n.locale), code: "BS-SYNC-ORDERS-PRICE" } }, false, !unconfirmed);
   } catch (error) {
     notify(error.message, true);
     const stored = await run(() => desktopRequest("load"));
@@ -597,6 +599,7 @@ element("pause-sync").onclick = () => {
 for (const id of ["login", "relogin"]) element(id).onclick = () => run(() => desktopRequest("login"));
 element("retry-auth").onclick = () => refreshAuthentication(false);
 element("export").onclick = () => run(() => desktopRequest("export"));
+element("open-diagnostics").onclick = () => run(() => desktopRequest("open-diagnostics"));
 element("filter-toggle").onclick = () => {
   element("filter-panel").hidden = !element("filter-panel").hidden;
   element("filter-toggle").setAttribute("aria-expanded", String(!element("filter-panel").hidden));
