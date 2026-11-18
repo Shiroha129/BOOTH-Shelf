@@ -42,6 +42,17 @@ const unconfirmedReceipt = window.AccountReader.receipt(receiptPage("unknown"), 
 check("unknownPaymentIsNotFatal", unconfirmedReceipt.paymentUnconfirmed === true && unconfirmedReceipt.paid && unconfirmedReceipt.total === null);
 check("missingReceiptLinesAreUnconfirmed", window.AccountReader.receipt(receiptPage("790 JPY", ""), "https://accounts.booth.pm/orders/123").paymentUnconfirmed === true);
 const confirmedReceipt = window.AccountReader.receipt(receiptPage(), "https://accounts.booth.pm/orders/123");
+const japaneseReceipt = (totalRow, itemPrice = "￥１，２００", status = "支払い完了") => window.AccountReader.receipt(parse(`<main><h2>${status}</h2><dl><dt>商品小計</dt><dd>¥5,000</dd>${totalRow}</dl><table><tr><td><a href="https://shop.booth.pm/items/17">衣装</a></td><td>${itemPrice}</td></tr></table></main>`), "https://accounts.booth.pm/orders/123");
+const yenReceipt = japaneseReceipt('<dt>お支払金額（税込）</dt><dd>￥１，３００</dd>');
+check("japanesePaymentLabelAndFullWidthYen", yenReceipt.paid && yenReceipt.total === 1300 && yenReceipt.lines[0]?.price === 1200);
+check("japaneseFinalTotal", japaneseReceipt('<dt>合計金額</dt><dd>1,300 円</dd>').total === 1300);
+check("subtotalDoesNotBecomeOrderTotal", japaneseReceipt("").total === null);
+check("nonYenTotalStaysUnknown", japaneseReceipt('<dt>合計金額</dt><dd>$1,300</dd>').total === null);
+check("pendingPaymentExcluded", !japaneseReceipt('<dt>お支払い金額</dt><dd>¥1,300</dd>', '¥1,200', '注文完了・お支払い待ち').paid);
+check("conflictingTotalsStayUnknown", japaneseReceipt('<dt>お支払い金額</dt><dd>¥1,300</dd><dt>請求金額</dt><dd>¥1,400</dd>').total === null);
+check("confirmedZeroIsNotUnknown", japaneseReceipt('<dt>お支払い金額</dt><dd>¥0</dd>', '¥0').total === 0);
+const boostReceipt = window.AccountReader.receipt(parse('<main>支払い済み お支払い金額 ¥1,300<article><a href="https://shop.booth.pm/items/17">衣装</a><div>¥1,200</div><div><span class="particulars-heading">BOOST</span><span>¥100</span></div></article></main>'), "https://accounts.booth.pm/orders/123");
+check("yenBoostSeparateFromItemPrice", boostReceipt.paid && boostReceipt.lines[0]?.price === 1200 && boostReceipt.lines[0]?.boost === 100);
 check("confirmedPaymentPreserved", !confirmedReceipt.paymentUnconfirmed && confirmedReceipt.total === 790 && confirmedReceipt.lines[0].price === 790);
 const libraryFetch = window.fetch;
 window.fetch = async url => ({ ok: true, status: 200, url, headers: { get: () => null }, text: async () => receiptPage("unknown").documentElement.outerHTML });

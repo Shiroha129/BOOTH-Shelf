@@ -100,12 +100,12 @@ await wait(() => element("file-dialog").open && window.document.querySelectorAll
 check("localDownloadOpensSameAsset", harness.messages.findLast(message => message.action === "files").payload.id === "1" && element("file-product").textContent === "测试衣装");
 check("localDownloadClosesLocalDialog", !element("local-dialog").open);
 check("additionalFilesRequireUserSelection", harness.messages.filter(message => message.action === "downloads-start").length === started);
-for (const language of ["zh-CN", "zh-TW", "ja", "en", "ko"]) {
+for (const [language, openFolder] of Object.entries({ "zh-CN": "打开目录", "zh-TW": "開啟資料夾", ja: "保存先フォルダーを開く", en: "Open folder", ko: "폴더 열기" })) {
   element("language-select").value = language;
   element("language-select").dispatchEvent(new window.Event("change"));
   await wait(() => window.I18n.language === language);
   check("translatedDownloadActions_" + language, element("local-download").textContent === window.I18n.t("下载其他文件")
-    && window.document.querySelector(".download-row > button").textContent === window.I18n.t("打开目录"));
+    && window.document.querySelector(".download-row > button").textContent === openFolder);
   check("translatedUnknownSize_" + language, [...window.document.querySelectorAll(".file-size")].at(-1).textContent === window.I18n.t("大小未知"));
   check("translatedDownloadedMarker_" + language, window.document.querySelector(".file-downloaded-badge:not([hidden])").textContent === window.I18n.t("已下载"));
 }

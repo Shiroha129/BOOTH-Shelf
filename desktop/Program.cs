@@ -216,6 +216,7 @@ internal sealed partial class ShelfWindow : Form
             object? result = action switch
             {
                 "load" => await LoadStateAsync(),
+                "unconfirmed-orders" => purchases.PendingOrders(),
                 "login" => await OpenBoothAsync(),
                 "auth-check" => await CheckAuthAsync(),
                 "session-save" => await SaveLoginSessionNowAsync(),
@@ -304,6 +305,8 @@ internal sealed partial class ShelfWindow : Form
             }
             metadata.Merge(state["snapshot"] as JsonObject);
             metadata.Merge(state["pendingSnapshot"] as JsonObject);
+            if (state["snapshot"] is JsonObject savedSnapshot) purchases.Apply(savedSnapshot);
+            if (state["pendingSnapshot"] is JsonObject pendingSnapshot) purchases.Apply(pendingSnapshot);
             state["settings"] = preferences.DeepClone();
             state["boothAccess"] = boothAccess.State();
             state["appUpdate"] = AppUpdateState();

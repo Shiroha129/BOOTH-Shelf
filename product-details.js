@@ -241,12 +241,12 @@ element("product-main-image").onkeydown = event => {
 element("product-save-image").onclick = () => run(async () => {
   const target = productImageMenuTarget;
   closeProductImageMenu();
-  if (target && await desktopRequest("save-product-image", target)) notify(t("图片已保存"), false, true);
+  if (target && await desktopRequest("save-product-image", target)) notify("图片已保存", false, true);
 });
 element("product-copy-image").onclick = () => run(async () => {
   const target = productImageMenuTarget;
   closeProductImageMenu();
-  if (target && await desktopRequest("copy-product-image", target)) notify(t("图片已复制"), false, true);
+  if (target && await desktopRequest("copy-product-image", target)) notify("图片已复制", false, true);
 });
 document.addEventListener("pointerdown", event => { if (!event.target.closest("#product-image-menu")) closeProductImageMenu(); });
 document.addEventListener("keydown", event => {

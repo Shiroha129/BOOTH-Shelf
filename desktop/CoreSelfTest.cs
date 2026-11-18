@@ -188,9 +188,43 @@ internal static class CoreSelfTest
         retried.Apply(synced);
         Check(unconfirmedCalls.SequenceEqual(new[] { "11", "14" }) && synced["spend"]!["complete"]!.GetValue<bool>()
             && synced["spend"]!["totalJpy"]!.GetValue<decimal>() == 3100, "后续同步未重试未确认订单或重复累计已确认金额");
+        var legacyRoot = Subdirectory(root, "legacy-unconfirmed");
+        File.WriteAllText(Path.Combine(legacyRoot, "purchase-state.json"), """{"complete":false,"unconfirmedOrders":["9","123"]}""");
+        var legacy = new PurchaseCatalog(legacyRoot);
+        Check(legacy.PendingOrders().Count == 2 && legacy.PendingOrders()[0]!["id"]!.GetValue<string>() == "123"
+            && legacy.PendingOrders().All(order => order!["reason"]!.GetValue<string>() == "unknown"),
+            "旧版待核对订单未直接恢复或伪造了原因");
+        var missingRowsRoot = Subdirectory(root, "missing-receipt-rows");
+        var rowsResolved = false;
+        Task<JsonObject> ReadMissingRows(string url, string kind, CancellationToken token)
+        {
+            if (kind == "orders") return Task.FromResult(new JsonObject { ["page"] = 1, ["maxPage"] = 1, ["ids"] = new JsonArray("21") });
+            return Task.FromResult(new JsonObject { ["id"] = "21", ["paid"] = true, ["total"] = 1300m,
+                ["paymentUnconfirmed"] = !rowsResolved,
+                ["lines"] = rowsResolved ? new JsonArray(new JsonObject { ["itemId"] = "1", ["price"] = 1200m, ["boost"] = 100m }) : new JsonArray() });
+        }
+        var missingRows = new PurchaseCatalog(missingRowsRoot);
+        await missingRows.SyncAsync(ReadMissingRows, (_, _) => { }, CancellationToken.None);
+        var rowsSnapshot = new JsonObject { ["items"] = new JsonArray(Item("1")) };
+        missingRows.Apply(rowsSnapshot);
+        Check(rowsSnapshot["spend"]!["totalJpy"]!.GetValue<decimal>() == 1300 && rowsSnapshot["spend"]!["orders"]!.GetValue<int>() == 1
+            && rowsSnapshot["spend"]!["unconfirmedTotals"]!.GetValue<int>() == 0 && rowsSnapshot["items"]![0]!["purchaseJpy"] == null
+            && missingRows.PendingOrders()[0]!["reason"]!.GetValue<string>() == "missing-lines",
+            "商品明细缺失导致已确认支付总额丢失或伪造商品价格");
+        var restoredRows = new PurchaseCatalog(missingRowsRoot);
+        restoredRows.Apply(rowsSnapshot);
+        Check(rowsSnapshot["spend"]!["totalJpy"]!.GetValue<decimal>() == 1300 && restoredRows.PendingOrders().Count == 1,
+            "重启后丢失已确认总额或待核对商品明细");
+        rowsResolved = true;
+        await restoredRows.SyncAsync(ReadMissingRows, (_, _) => { }, CancellationToken.None);
+        restoredRows.Apply(rowsSnapshot);
+        Check(rowsSnapshot["spend"]!["totalJpy"]!.GetValue<decimal>() == 1300 && rowsSnapshot["spend"]!["complete"]!.GetValue<bool>()
+            && restoredRows.PendingOrders().Count == 0 && rowsSnapshot["items"]![0]!["purchaseJpy"]!.GetValue<decimal>() == 1300,
+            "商品明细恢复后重复累计支付总额或未清除待核对状态");
         return new JsonObject { ["paidTotals"] = true, ["boost"] = true, ["canceledExcluded"] = true, ["unknownIsNotZero"] = true,
             ["cacheAfterRestart"] = true, ["incrementalStopsEarly"] = true, ["unchangedSkipsOrders"] = true, ["partialTotalsMarked"] = true,
-            ["unconfirmedPaymentKeepsLibrary"] = true, ["unconfirmedPreservesCachedPrice"] = true, ["unconfirmedRetriedAfterRestart"] = true };
+            ["unconfirmedPaymentKeepsLibrary"] = true, ["unconfirmedPreservesCachedPrice"] = true, ["unconfirmedRetriedAfterRestart"] = true,
+            ["legacyPendingOrdersRestored"] = true, ["confirmedTotalWithoutRows"] = true, ["missingRowsRetriedAfterRestart"] = true };
     }
 
     private static JsonObject LocalFiles(string root)

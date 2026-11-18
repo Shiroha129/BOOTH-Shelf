@@ -198,6 +198,10 @@ dialog::backdrop { background: #22293675; backdrop-filter: blur(2px); }
 .stats > div { min-width: 0; }
 .spend-stat strong { font-size: 23px; color: #be503e; overflow-wrap: anywhere; }
 #spend-detail { color: #989da6; font-size: 10px; line-height: 1.5; }
+#show-pending-orders { align-self: flex-start; text-align: start; padding: 0; }
+#pending-orders-list { list-style: none; margin: 16px 0 0; padding: 0; max-height: 60vh; overflow: auto; }
+#pending-orders-list li { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 10px 0; border-top: 1px solid var(--line); }
+#pending-orders-list a { color: var(--accent); text-decoration: underline; }
 .library-tabs { display: flex; width: fit-content; margin: 0 0 18px; border: 1px solid #dce0e6; border-radius: 7px; overflow: hidden; }
 .library-tabs button { background: white; padding: 10px 24px; color: #858c98; border-right: 1px solid #e8eaf0; font-size: 13px; }
 .library-tabs button:last-child { border: none; }

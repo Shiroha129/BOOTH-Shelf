@@ -7,7 +7,7 @@ internal sealed class PurchaseCatalog
     private readonly string root;
     private readonly string statePath;
     private readonly Dictionary<string, JsonObject> receipts = new();
-    private readonly HashSet<string> unconfirmedOrders = new();
+    private readonly Dictionary<string, string> unconfirmedOrders = new();
     private bool complete;
 
     internal PurchaseCatalog(string dataRoot)
@@ -16,7 +16,11 @@ internal sealed class PurchaseCatalog
         statePath = Path.Combine(dataRoot, "purchase-state.json");
         var state = File.Exists(statePath) ? JsonNode.Parse(File.ReadAllText(statePath)) : null;
         complete = state?["complete"]?.GetValue<bool>() == true;
-        foreach (var id in state?["unconfirmedOrders"] as JsonArray ?? new JsonArray()) unconfirmedOrders.Add(id!.GetValue<string>());
+        foreach (var node in state?["unconfirmedOrders"] as JsonArray ?? new JsonArray())
+        {
+            var id = node!.GetValue<string>();
+            unconfirmedOrders[id] = state?["unconfirmedReasons"]?[id]?.GetValue<string>() ?? "unknown";
+        }
         Directory.CreateDirectory(root);
         foreach (var file in Directory.EnumerateFiles(root, "*.json"))
         {
@@ -31,7 +35,7 @@ internal sealed class PurchaseCatalog
         var remaining = requiredItems?.ToHashSet();
         void Resolve(JsonObject receipt)
         {
-            if (receipt["paid"]?.GetValue<bool>() == true && !unconfirmedOrders.Contains(receipt["id"]!.GetValue<string>()))
+            if (receipt["paid"]?.GetValue<bool>() == true && !unconfirmedOrders.ContainsKey(receipt["id"]!.GetValue<string>()))
                 foreach (var line in receipt["lines"]!.AsArray()) remaining?.Remove(line!["itemId"]!.GetValue<string>());
         }
         foreach (var receipt in receipts.Values) Resolve(receipt);
@@ -58,7 +62,7 @@ internal sealed class PurchaseCatalog
                 totalPages = Math.Max(totalPages, batch["maxPage"]!.GetValue<int>());
                 ids.AddRange(batch["ids"]!.AsArray().Select(value => value!.GetValue<string>()).Where(seen.Add));
             }
-            foreach (var group in ids.Where(id => unconfirmedOrders.Contains(id) || !receipts.TryGetValue(id, out var record) || record["paid"]?.GetValue<bool>() != true
+            foreach (var group in ids.Where(id => unconfirmedOrders.ContainsKey(id) || !receipts.TryGetValue(id, out var record) || record["paid"]?.GetValue<bool>() != true
                 || !DateTimeOffset.TryParse(record["checkedAt"]?.GetValue<string>(), out var checkedAt) || DateTimeOffset.UtcNow - checkedAt > TimeSpan.FromDays(30)).Chunk(8))
             {
                 var results = await Task.WhenAll(group.Select(async id =>
@@ -72,24 +76,28 @@ internal sealed class PurchaseCatalog
                     }
                     catch (Exception error) { return (Record: (JsonObject?)null, Error: error); }
                 }));
-                if (results.Any(result => result.Record?["paymentUnconfirmed"]?.GetValue<bool>() == true))
-                {
-                    foreach (var record in results.Where(result => result.Record?["paymentUnconfirmed"]?.GetValue<bool>() == true).Select(result => result.Record!))
-                    {
-                        unconfirmedOrders.Add(record["id"]!.GetValue<string>());
-                        Program.Diagnostics?.Record("sync.orders.detail", "warning", "BS-SYNC-ORDERS-PRICE",
-                            count: record["lines"]!.AsArray().Count, reason: record["total"] == null ? "missing-total" : "missing-lines");
-                    }
-                    SetComplete(false);
-                }
-                foreach (var record in results.Where(result => result.Record != null && result.Record["paymentUnconfirmed"]?.GetValue<bool>() != true).Select(result => result.Record!))
+                var pendingChanged = false;
+                foreach (var record in results.Where(result => result.Record != null).Select(result => result.Record!))
                 {
                     var id = record["id"]!.GetValue<string>();
+                    if (record["paymentUnconfirmed"]?.GetValue<bool>() == true)
+                    {
+                        var lineCount = record["lines"]!.AsArray().Count;
+                        var reason = record["total"] != null ? "missing-lines" : lineCount == 0 ? "missing-total-and-lines" : "missing-total";
+                        unconfirmedOrders[id] = reason;
+                        pendingChanged = true;
+                        Program.Diagnostics?.Record("sync.orders.detail", "warning", "BS-SYNC-ORDERS-PRICE", count: lineCount, reason: reason);
+                        if (record["total"] == null) continue;
+                        // A confirmed order total is useful even when the item rows are missing.
+                        if (receipts.TryGetValue(id, out var previous) && previous["paid"]?.GetValue<bool>() == true)
+                            record["lines"] = previous["lines"]!.DeepClone();
+                    }
+                    else pendingChanged |= unconfirmedOrders.Remove(id);
                     SyncCache.AtomicWrite(Path.Combine(root, id + ".json"), record.ToJsonString());
                     receipts[id] = record;
-                    unconfirmedOrders.Remove(id);
                     Resolve(record);
                 }
+                if (pendingChanged) SetComplete(false);
                 var failure = results.FirstOrDefault(result => result.Error != null).Error;
                 if (failure != null) throw failure;
                 token.ThrowIfCancellationRequested();
@@ -107,8 +115,13 @@ internal sealed class PurchaseCatalog
     {
         complete = value;
         SyncCache.AtomicWrite(statePath, new JsonObject { ["complete"] = value, ["checkedAt"] = DateTimeOffset.UtcNow.ToString("O"),
-            ["unconfirmedOrders"] = new JsonArray(unconfirmedOrders.Select(id => (JsonNode)JsonValue.Create(id)!).ToArray()) }.ToJsonString());
+            ["unconfirmedOrders"] = new JsonArray(unconfirmedOrders.Keys.Select(id => (JsonNode)JsonValue.Create(id)!).ToArray()),
+            ["unconfirmedReasons"] = System.Text.Json.JsonSerializer.SerializeToNode(unconfirmedOrders) }.ToJsonString());
     }
+
+    internal JsonArray PendingOrders() => new(unconfirmedOrders.OrderByDescending(entry => entry.Key.Length)
+        .ThenByDescending(entry => entry.Key, StringComparer.Ordinal)
+        .Select(entry => (JsonNode)new JsonObject { ["id"] = entry.Key, ["reason"] = entry.Value }).ToArray());
 
     internal void Apply(JsonObject snapshot)
     {
@@ -137,6 +150,7 @@ internal sealed class PurchaseCatalog
         }
         snapshot["spend"] = new JsonObject { ["totalJpy"] = total, ["orders"] = count, ["complete"] = complete,
             ["unconfirmedOrders"] = unconfirmedOrders.Count,
+            ["unconfirmedTotals"] = unconfirmedOrders.Values.Count(reason => reason != "missing-lines"),
             ["pricedAssets"] = items.Values.Count(item => item["purchaseJpy"] != null), ["checkedAt"] = DateTimeOffset.UtcNow.ToString("O") };
     }
 }

@@ -1,6 +1,6 @@
 const testFixture = {
   testing: true,
-  appUpdate: { status: "idle", currentVersion: "1.0.9" },
+  appUpdate: { status: "idle", currentVersion: "1.0.10" },
   systemLanguage: "zh-CN",
   settings: { currency: "CNY", downloadDirectory: "C:\\TestDownloads", rememberSession: true, pinnedTags: [], language: "auto", closeBehavior: "ask", updateNotifications: true, notificationIntervalMinutes: 60 },
   boothAccess: { paused: false },
@@ -48,6 +48,7 @@ window.chrome.webview = {
       const payload = message.payload;
       switch (message.action) {
         case "load": result = testFixture; break;
+        case "unconfirmed-orders": result = testFixture.pendingOrders || []; break;
         case "app-update-check":
           testFixture.appUpdate = { ...testFixture.appUpdate, status: "checking", error: null };
           result = testFixture.appUpdate; break;

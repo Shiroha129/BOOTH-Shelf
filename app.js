@@ -572,7 +572,8 @@ async function synchronize() {
     setAuth(true);
     element("sync-mode").value = "quick";
     const unconfirmed = snapshot.spend?.unconfirmedOrders > 0;
-    notify({ key: unconfirmed ? "同步完成 · {count} 件商品；部分订单金额待核对 [{code}]" : "同步完成 · {count} 件商品",
+    notify({ key: unconfirmed ? (snapshot.spend.unconfirmedTotals ?? snapshot.spend.unconfirmedOrders) > 0
+      ? "同步完成 · {count} 件商品；部分订单金额待核对 [{code}]" : "同步完成 · {count} 件商品；部分订单商品明细待核对 [{code}]" : "同步完成 · {count} 件商品",
       values: { count: snapshot.items.length.toLocaleString(I18n.locale), code: "BS-SYNC-ORDERS-PRICE" } }, false, !unconfirmed);
   } catch (error) {
     notify(error.message, true);

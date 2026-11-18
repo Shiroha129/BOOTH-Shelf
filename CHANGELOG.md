@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.10 — 2026-11-19
+
+### 中文
+
+- 补齐下载按钮、弹窗和错误提示的五种界面语言，修复语言切换后的提示。
+- 支持日文付款金额格式；已确认的支付总额不再因商品明细缺失而丢失。
+- 累计支付新增待核对订单列表，显示订单号、原因及订单页面入口。
+
+### 日本語
+
+- ダウンロードボタン・ダイアログ・エラー表示の翻訳を補完し、言語変更後の通知も更新。
+- 日本語の支払金額表示に対応。商品明細が読み取れない場合も確認済みの支払総額を集計。
+- 累計支払額から未確認の注文番号・理由を確認し、注文ページを開けるように改善。
+
+### English
+
+- Complete translations for download actions, dialogs and errors, and refresh messages after language changes.
+- Read Japanese payment formats and retain confirmed totals when item details are unavailable.
+- View unconfirmed order IDs and reasons from spending statistics and open their order pages.
+
 ## 1.0.9 — 2026-11-18
 
 ### 中文

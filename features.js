@@ -36,10 +36,48 @@ function priceText(item) {
 }
 function renderFinancials() {
   const spend = snapshot.spend;
-  element("total-spend").textContent = spend && (spend.complete !== false || spend.orders > 0) ? converted(spend.totalJpy) || money(spend.totalJpy) : t("待全局更新");
-  element("spend-detail").textContent = spend ? money(spend.totalJpy) + " · " + t("{count} 笔已核对订单", { count: spend.orders.toLocaleString(I18n.locale) }) + (spend.complete === false ? " · " + t(spend.unconfirmedOrders > 0 ? "部分订单金额待核对" : "历史待全局更新") : "") : t("全局更新后统计历史成交金额");
+  const hasAmount = spend && (spend.complete !== false || spend.orders > 0);
+  const pending = spend?.unconfirmedOrders > 0;
+  const pendingTotals = (spend?.unconfirmedTotals ?? spend?.unconfirmedOrders) > 0;
+  element("total-spend").textContent = hasAmount ? converted(spend.totalJpy) || money(spend.totalJpy) : t(pending ? "订单金额待核对" : "待全局更新");
+  element("spend-detail").textContent = spend ? (hasAmount ? money(spend.totalJpy) + " · " + t("{count} 笔已核对订单", { count: spend.orders.toLocaleString(I18n.locale) }) : t("尚无已核对的支付金额"))
+    + (spend.complete === false ? " · " + t(pendingTotals ? "部分订单金额待核对" : pending ? "部分订单商品明细待核对" : "历史待全局更新") : "") : t("全局更新后统计历史成交金额");
   element("total-spend").title = t("已核对订单的实际支付金额，包含 BOOST 和订单费用；非日元金额按最新可用汇率估算。");
+  element("show-pending-orders").hidden = !pending;
+  element("show-pending-orders").textContent = pending ? t("查看 {count} 笔待核对订单", { count: spend.unconfirmedOrders.toLocaleString(I18n.locale) }) : "";
 }
+let pendingOrderDetails = [];
+function renderPendingOrders() {
+  const fragment = document.createDocumentFragment();
+  for (const order of pendingOrderDetails) {
+    const row = document.createElement("li");
+    const link = document.createElement("a");
+    link.href = "https://accounts.booth.pm/orders/" + encodeURIComponent(order.id);
+    link.textContent = t("订单 {id}", { id: order.id });
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    const reason = document.createElement("span");
+    reason.textContent = t({ "missing-total": "未识别支付总额", "missing-lines": "已确认支付总额，未识别商品明细",
+      "missing-total-and-lines": "未识别支付总额和商品明细" }[order.reason] || "原因尚未记录，请全局更新后再核对。");
+    row.append(link, reason);
+    fragment.append(row);
+  }
+  if (!pendingOrderDetails.length) {
+    const row = document.createElement("li");
+    row.textContent = t("没有待核对订单");
+    fragment.append(row);
+  }
+  element("pending-orders-list").replaceChildren(fragment);
+}
+element("show-pending-orders").onclick = () => run(async () => {
+  element("show-pending-orders").disabled = true;
+  try {
+    pendingOrderDetails = await desktopRequest("unconfirmed-orders");
+    renderPendingOrders();
+    element("pending-orders-dialog").showModal();
+  } finally { element("show-pending-orders").disabled = false; }
+});
+element("close-pending-orders").onclick = () => element("pending-orders-dialog").close();
 function renderCurrency() {
   element("currency-state").textContent = exchangeRates.error ? I18n.message(exchangeRates.error) : exchangeRates.date
     ? t("汇率日期 {date} · {source} · 折算金额仅供参考", { date: exchangeRates.date, source: exchangeRates.source })
@@ -73,6 +111,11 @@ function applyLanguage() {
   if (localItem) renderLocalFiles();
   if (localSelected) selectLocalFile(localSelected); else element("local-details").textContent = t("选择文件查看详情");
   if (typeof renderProduct === "function" && productData) renderProduct();
+  if (element("pending-orders-dialog").open) renderPendingOrders();
+  if (element("preset-dialog").open) {
+    element("preset-summary").textContent = presetSummary(currentPreset());
+    updatePresetSaveLabel();
+  }
 }
 function renderShopPage() {
   const groups = new Map();
@@ -173,12 +216,12 @@ element("asset-copy").onclick = () => run(async () => {
   closeAssetMenu();
   if (!item) return;
   await desktopRequest("copy-product-url", { id: item.id });
-  notify(t("链接已复制"), false, true);
+  notify("链接已复制", false, true);
 });
 element("asset-library").onclick = () => {
   const item = assetMenuItem;
   closeAssetMenu();
-  if (item && !locateLibraryItem(item.id)) notify(t("请先同步该资产，再定位到资料库。"), true);
+  if (item && !locateLibraryItem(item.id)) notify("请先同步该资产，再定位到资料库。", true);
 };
 element("asset-folder").onclick = () => run(async () => {
   const file = localFiles.find(file => file.itemId === assetMenuItem?.id);
@@ -210,7 +253,7 @@ element("confirm-asset-delete").onclick = async () => {
   try {
     localFiles = await desktopRequest("local-asset-delete", assetDeletion);
     element("asset-delete-dialog").close();
-    notify(t("资产文件夹已移到回收站"));
+    notify("资产文件夹已移到回收站");
   } catch (error) {
     element("asset-delete-error").textContent = I18n.message(error.message);
     element("asset-delete-error").hidden = false;

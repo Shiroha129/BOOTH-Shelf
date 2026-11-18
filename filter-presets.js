@@ -11,7 +11,12 @@ function presetSummary(preset) {
   const filters = preset.filters || {};
   return [["包含", filters.tags], ["任一", filters.anyTags], ["排除", filters.excludedTags]]
     .filter(([, values]) => values?.length).map(([label, values]) => t(label) + ": " + values.join("、"))
-    .concat(Object.entries(filterFields).filter(([key]) => filters[key]).map(([key, id]) => (element(id).getAttribute("aria-label") || t({ all: "全部关键词", any: "任一关键词", exclude: "排除关键词", shop: "店铺", category: "类别", subcategory: "详细分类", event: "活动", form: "商品形态", age: "年龄限制", downloadState: "下载状态" }[key])) + ": " + (key === "downloadState" ? t(filters[key] === "downloaded" ? "已下载" : "未下载") : filters[key])))
+    .concat(Object.entries(filterFields).filter(([key]) => filters[key]).map(([key, id]) => {
+      const field = element(id);
+      const label = field.getAttribute("aria-label") || t({ all: "全部关键词", any: "任一关键词", exclude: "排除关键词", shop: "店铺", category: "类别", subcategory: "详细分类", event: "活动", form: "商品形态", age: "年龄限制", downloadState: "下载状态" }[key]);
+      const value = field.tagName === "SELECT" ? [...field.options].find(option => option.value === filters[key])?.textContent || filters[key] : filters[key];
+      return label + ": " + value;
+    }))
     .concat(preset.selectedShop ? [t("店铺") + ": " + preset.selectedShop] : []).join(" · ") || t("不限");
 }
 function renderPresets() {

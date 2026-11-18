@@ -25,10 +25,13 @@ async function createHarness(options = {}) {
     testFixture.testing = startupFixture.testing === true;
     testFixture.boothAccess.paused = startupFixture.paused === true;
     if (startupFixture.language) testFixture.settings.language = startupFixture.language;
+    if (startupFixture.currency) testFixture.settings.currency = startupFixture.currency;
     if (startupFixture.unconfirmedPayments) {
       testFixture.snapshot.spend.unconfirmedOrders = 1;
       testFixture.snapshot.spend.complete = false;
     }
+    if (startupFixture.spend) Object.assign(testFixture.snapshot.spend, startupFixture.spend);
+    testFixture.pendingOrders = startupFixture.pendingOrders || [{ id: "123", reason: "missing-total" }];
     if (startupFixture.firstUse) testFixture.snapshot = null;
     if (startupFixture.empty) testFixture.snapshot.items = [];
     if (startupFixture.pendingMode) testFixture.pendingMode = startupFixture.pendingMode;
@@ -127,6 +130,55 @@ for (const language of ["zh-CN", "zh-TW", "ja", "en", "ko"]) {
     check("diagnosticErrorTranslated_" + language, translated.includes("BS-SYNC-ORDERS-DETAIL-NETWORK") && translated.includes(harness.window.I18n.t("核对订单金额")) && translated.includes(harness.window.I18n.t("BOOTH 请求超时")));
   } finally { harness.close(); }
 }
+
+for (const language of ["zh-CN", "zh-TW", "ja", "en", "ko"]) {
+  const harness = await createHarness({ language, testing: true,
+    spend: { totalJpy: 0, orders: 0, complete: false, unconfirmedOrders: 402 },
+    pendingOrders: [{ id: "123", reason: "unknown" }, { id: "122", reason: "missing-total-and-lines" }]
+  });
+  try {
+    check("unknownAmountDoesNotShowZero_" + language, harness.element("total-spend").textContent === harness.window.I18n.t("订单金额待核对")
+      && !harness.element("spend-detail").textContent.includes("0 JPY"));
+    const button = harness.element("show-pending-orders");
+    check("legacyPendingOrdersVisible_" + language, !button.hidden && button.textContent.includes("402"));
+    button.click();
+    await wait();
+    const dialog = harness.element("pending-orders-dialog");
+    const link = dialog.querySelector("a");
+    check("pendingOrdersOpenOfficialReceipt_" + language, dialog.open && link?.href === "https://accounts.booth.pm/orders/123"
+      && link.target === "_blank" && link.textContent === harness.window.I18n.t("订单 {id}", { id: "123" }));
+    check("legacyReasonIsHonest_" + language, dialog.textContent.includes(harness.window.I18n.t("原因尚未记录，请全局更新后再核对。")));
+    check("missingAmountAndLinesExplained_" + language, dialog.textContent.includes(harness.window.I18n.t("未识别支付总额和商品明细")));
+    harness.element("close-pending-orders").click();
+    check("pendingOrdersClose_" + language, !dialog.open);
+    harness.window.notify("链接已复制");
+    harness.element("language-select").value = "en";
+    harness.element("language-select").dispatchEvent(new harness.window.Event("change"));
+    await wait();
+    check("noticeFollowsLanguageChange_" + language, harness.element("notice").textContent === "Link copied");
+  } finally { harness.close(); }
+}
+
+const rowsHarness = await createHarness({ language: "ja", currency: "JPY", testing: true,
+  spend: { totalJpy: 1300, orders: 1, complete: false, unconfirmedOrders: 1, unconfirmedTotals: 0 },
+  pendingOrders: [{ id: "123", reason: "missing-lines" }]
+});
+try {
+  check("confirmedTotalShownWithoutRows", rowsHarness.element("total-spend").textContent.includes("1,300")
+    && rowsHarness.element("spend-detail").textContent.includes(rowsHarness.window.I18n.t("部分订单商品明细待核对")));
+  rowsHarness.element("show-pending-orders").click();
+  await wait();
+  rowsHarness.element("language-select").value = "ko";
+  rowsHarness.element("language-select").dispatchEvent(new rowsHarness.window.Event("change"));
+  await wait();
+  check("openPendingDialogFollowsLanguage", rowsHarness.element("pending-orders-list").textContent.includes(rowsHarness.window.I18n.t("已确认支付总额，未识别商品明细")));
+  rowsHarness.element("close-pending-orders").click();
+  rowsHarness.element("form-filter").value = "digital";
+  rowsHarness.element("age-filter").value = "adult";
+  rowsHarness.element("save-preset").click();
+  check("presetValuesUseTranslatedLabels", rowsHarness.element("preset-summary").textContent.includes(rowsHarness.window.I18n.t("下载商品"))
+    && rowsHarness.element("preset-summary").textContent.includes(rowsHarness.window.I18n.t("仅 R-18")));
+} finally { rowsHarness.close(); }
 
 for (const options of [{ firstUse: true, enabled: true }, { firstUse: true, settingsError: true }]) {
   const harness = await createHarness(options);
