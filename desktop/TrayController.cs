@@ -29,14 +29,13 @@ internal sealed class TrayController : IDisposable
     internal void Hide()
     {
         RememberWindowState(null, EventArgs.Empty);
+        // Changing ShowInTaskbar recreates the handle and can reshow a maximized window.
         window.Hide();
-        window.ShowInTaskbar = false;
     }
 
     internal void Restore()
     {
         if (window.IsDisposed) return;
-        window.ShowInTaskbar = true;
         window.Show();
         window.WindowState = restoreState;
         window.Activate();

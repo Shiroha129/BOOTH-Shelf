@@ -1,14 +1,18 @@
 using System.Text.Json.Nodes;
+using System.Runtime.InteropServices;
 
 namespace BoothShelf;
 
 internal static class TraySelfTest
 {
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr handle);
+
     internal static void Run(string root)
     {
         var report = new JsonObject();
         var language = NativeLanguage.Preference;
-        using var window = new Form { Text = "BOOTH Shelf tray test", Opacity = 0, ShowInTaskbar = false };
+        using var window = new Form { Text = "BOOTH Shelf tray test", FormBorderStyle = FormBorderStyle.None, Opacity = 0 };
         using var timeout = new System.Windows.Forms.Timer { Interval = 10000 };
         timeout.Tick += (_, _) => { report["passed"] = false; report["error"] = "Tray test timeout"; window.Close(); };
         window.Shown += async (_, _) =>
@@ -18,16 +22,20 @@ internal static class TraySelfTest
                 using var cancellation = new CancellationTokenSource();
                 var exited = false;
                 using var tray = new TrayController(window, () => { exited = true; window.Close(); });
+                var windowHandle = window.Handle;
                 tray.Hide();
-                Check(!window.Visible && !window.ShowInTaskbar && !window.IsDisposed && !cancellation.IsCancellationRequested, "缩小到托盘关闭了窗口或后台任务");
+                Check(!window.Visible && !IsWindowVisible(window.Handle) && !window.IsDisposed && !cancellation.IsCancellationRequested, "缩小到托盘关闭了窗口或后台任务");
                 await Task.Delay(80);
                 Check(!window.Visible, "后台等待时窗口自行显示");
                 tray.Menu.Items[0].PerformClick();
                 Check(window.Visible && window.ShowInTaskbar && window.WindowState == FormWindowState.Normal, "托盘菜单未恢复窗口");
                 window.WindowState = FormWindowState.Maximized;
                 tray.Hide();
+                await Task.Delay(80);
+                Check(!window.Visible && !IsWindowVisible(window.Handle), "最大化窗口缩小到托盘后仍显示白色窗口");
                 tray.Restore();
-                Check(window.WindowState == FormWindowState.Maximized, "最大化状态丢失");
+                Check(window.WindowState == FormWindowState.Maximized && window.Visible && IsWindowVisible(window.Handle), "最大化窗口无法从托盘恢复");
+                Check(window.Handle == windowHandle, "缩小到托盘重建了界面所在的窗口句柄");
                 window.WindowState = FormWindowState.Normal;
                 window.WindowState = FormWindowState.Minimized;
                 tray.Hide();
@@ -48,6 +56,8 @@ internal static class TraySelfTest
                 report["hideKeepsWindowAlive"] = true;
                 report["restoreFromMenu"] = true;
                 report["restoreWindowState"] = true;
+                report["maximizedWindowHidden"] = true;
+                report["nativeHandlePreserved"] = true;
                 report["fiveLanguages"] = true;
                 report["exitFromTray"] = true;
                 report["passed"] = true;

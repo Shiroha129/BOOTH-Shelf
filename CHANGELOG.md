@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.11 — 2026-11-22
+
+### 中文
+
+- 修复最大化窗口选择“缩小到托盘”后仍留下白色窗口的问题，恢复窗口时保留最大化状态。
+
+### 日本語
+
+- 最大化したウィンドウで「トレイに最小化」を選ぶと白い画面が残る不具合を修正。トレイから開くと最大化状態を復元します。
+
+### English
+
+- Fix a white window remaining on the desktop when minimizing a maximized window to the tray, and preserve its maximized state when restored.
+
 ## 1.0.10 — 2026-11-19
 
 ### 中文
