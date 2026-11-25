@@ -1,6 +1,6 @@
 const testFixture = {
   testing: true,
-  appUpdate: { status: "idle", currentVersion: "1.0.11" },
+  appUpdate: { status: "idle", currentVersion: "1.0.12" },
   systemLanguage: "zh-CN",
   settings: { currency: "CNY", downloadDirectory: "C:\\TestDownloads", rememberSession: true, pinnedTags: [], language: "auto", closeBehavior: "ask", updateNotifications: true, notificationIntervalMinutes: 60 },
   boothAccess: { paused: false },

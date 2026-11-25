@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.12 — 2026-11-25
+
+### 中文
+
+- 修复后台浏览窗口出现在 Alt+Tab 中的问题，账号检查、同步和下载继续在后台运行。
+
+### 日本語
+
+- バックグラウンドのブラウザーウィンドウが Alt+Tab に表示される不具合を修正。アカウント確認・同期・ダウンロードは引き続きバックグラウンドで実行されます。
+
+### English
+
+- Fix background browser windows appearing in Alt+Tab while keeping account checks, synchronization and downloads running in the background.
+
 ## 1.0.11 — 2026-11-22
 
 ### 中文

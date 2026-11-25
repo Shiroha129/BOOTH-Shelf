@@ -13,6 +13,16 @@ internal sealed class SessionBrowser(BoothRequestPolicy? access = null) : IDispo
     private sealed class BackgroundWindow : Form
     {
         protected override bool ShowWithoutActivation => true;
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                var parameters = base.CreateParams;
+                parameters.ExStyle |= 0x80; // WS_EX_TOOLWINDOW keeps background browsers out of Alt+Tab.
+                return parameters;
+            }
+        }
     }
 
     internal readonly Form Window = new BackgroundWindow { Width = 1050, Height = 850, Opacity = 0, ShowInTaskbar = false };

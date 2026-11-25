@@ -8,6 +8,9 @@ internal static class TraySelfTest
     [DllImport("user32.dll")]
     private static extern bool IsWindowVisible(IntPtr handle);
 
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    private static extern IntPtr GetWindowLongPtr(IntPtr handle, int index);
+
     internal static void Run(string root)
     {
         var report = new JsonObject();
@@ -19,6 +22,14 @@ internal static class TraySelfTest
         {
             try
             {
+                using var background = new SessionBrowser();
+                background.Window.Show();
+                var backgroundHandle = background.Window.Handle;
+                Check(background.Window.Visible && IsWindowVisible(background.Window.Handle)
+                    && !background.Window.ShowInTaskbar && background.Window.Opacity == 0, "后台浏览窗口未保持透明且可用");
+                var backgroundStyle = GetWindowLongPtr(background.Window.Handle, -20).ToInt64();
+                Check((backgroundStyle & 0x80) != 0 && (backgroundStyle & 0x40000) == 0, "后台浏览窗口仍可出现在 Alt+Tab 中");
+                report["backgroundBrowserExcludedFromAltTab"] = true;
                 using var cancellation = new CancellationTokenSource();
                 var exited = false;
                 using var tray = new TrayController(window, () => { exited = true; window.Close(); });
@@ -53,6 +64,8 @@ internal static class TraySelfTest
                 tray.Hide();
                 tray.Menu.Items[2].PerformClick();
                 Check(exited && !window.Visible, "托盘退出菜单未关闭窗口");
+                Check(background.Window.Handle == backgroundHandle && IsWindowVisible(backgroundHandle), "托盘操作重建或隐藏了后台浏览窗口");
+                report["backgroundBrowserKeptAlive"] = true;
                 report["hideKeepsWindowAlive"] = true;
                 report["restoreFromMenu"] = true;
                 report["restoreWindowState"] = true;
